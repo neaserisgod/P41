@@ -185,7 +185,7 @@ class SessionController extends ChangeNotifier {
   }) async {
     _sessionError = null;
     notifyListeners();
-    final normalizedAccountName = accountName.trim().isEmpty ? 'HorsePos Cuenta' : accountName.trim();
+    final normalizedAccountName = accountName.trim().isEmpty ? 'P41 Cuenta' : accountName.trim();
     final normalizedEmail = ownerEmail.trim();
     final normalizedPassword = password.trim();
     if (normalizedEmail.isEmpty) {
@@ -321,7 +321,7 @@ class SessionController extends ChangeNotifier {
     }
 
     _account = AccountProfile(
-      accountName: accountJson['account_name']?.toString() ?? 'HorsePos',
+      accountName: accountJson['account_name']?.toString() ?? 'P41',
       ownerEmail: accountJson['owner_email']?.toString() ?? email,
       password: _account?.password ?? '',
       users: users,

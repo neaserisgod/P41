@@ -23,7 +23,7 @@ class LocalBackupService {
 
   Directory get _backupDirectory {
     final home = Platform.environment['HOME'] ?? '.';
-    return Directory('$home/.horsepos/backups');
+    return Directory('$home/.p41/backups');
   }
 
   Future<LocalBackupSummary> createBackup() async {
@@ -34,7 +34,7 @@ class LocalBackupService {
 
     final now = DateTime.now();
     final file = File(
-      '${directory.path}${Platform.pathSeparator}horsepos-backup-${now.toIso8601String().replaceAll(':', '-').replaceAll('.', '-')}Z.sqlite',
+      '${directory.path}${Platform.pathSeparator}p41-backup-${now.toIso8601String().replaceAll(':', '-').replaceAll('.', '-')}Z.sqlite',
     );
 
     await _localStoreService.exportDatabase(file.path);

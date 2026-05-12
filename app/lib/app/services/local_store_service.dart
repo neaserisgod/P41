@@ -13,7 +13,7 @@ class LocalStoreService {
 
   String get databasePath => _databaseFile.path;
 
-  File get _databaseFile => _horseposFile('horsepos.sqlite');
+  File get _databaseFile => _horseposFile('p41.sqlite');
   File get _legacyJsonFile => _horseposFile('local_state_v1.json');
 
   Future<Map<String, dynamic>> readScope(String scopeKey) async {
@@ -230,7 +230,7 @@ class LocalStoreService {
       'access_token': account['access_token']?.toString() ?? 'offline-local',
       'business_id': account['business_id']?.toString(),
       'account': {
-        'account_name': account['account_name']?.toString() ?? 'HorsePos',
+        'account_name': account['account_name']?.toString() ?? 'P41',
         'owner_email': account['owner_email']?.toString() ?? scopeKey,
       },
       'users': userRows
@@ -1137,7 +1137,7 @@ class LocalStoreService {
 
   File _horseposFile(String name) {
     final home = Platform.environment['HOME'] ?? '.';
-    return File('$home/.horsepos/$name');
+    return File('$home/.p41/$name');
   }
 
   String _escapeSqlPath(String path) {

@@ -202,7 +202,7 @@ class SessionApiService {
       displayName: displayName.isNotEmpty ? displayName : (firstName.isNotEmpty ? firstName : auth.email),
       role: profileResponse['role']?.toString() ?? 'admin',
       businessId: profileResponse['business_id']?.toString() ?? auth.businessId,
-      businessName: profileResponse['business_name']?.toString() ?? 'HorsePos',
+      businessName: profileResponse['business_name']?.toString() ?? 'P41',
     );
 
     final branches = branchesResponse

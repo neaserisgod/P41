@@ -30,14 +30,14 @@ import '../features/providers/state/providers_controller.dart';
 import '../features/reports/screens/reports_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
 
-class HorsePosStockV2App extends StatelessWidget {
-  const HorsePosStockV2App({super.key});
+class P41App extends StatelessWidget {
+  const P41App({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'HorsePos',
+      title: 'P41',
       theme: _buildTheme(),
       scrollBehavior: const _DesktopScrollBehavior(),
       home: const AppRoot(),
@@ -165,7 +165,7 @@ class _AppRootState extends State<AppRoot> {
             );
           case SessionStage.login:
             return LoginScreen(
-              accountName: _sessionController.accountName ?? 'HorsePos',
+              accountName: _sessionController.accountName ?? 'P41',
               rememberedAccounts: _sessionController.rememberedAccounts,
               onLocalPinLogin: ({
                 required email,

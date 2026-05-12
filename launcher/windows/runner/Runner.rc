@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "HorsePos" "\0"
-            VALUE "FileDescription", "HorsePos Launcher" "\0"
+            VALUE "CompanyName", "P41" "\0"
+            VALUE "FileDescription", "P41 Bootstrap" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "HorseLauncher" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 HorsePos. All rights reserved." "\0"
-            VALUE "OriginalFilename", "HorseLauncher.exe" "\0"
-            VALUE "ProductName", "HorsePos Launcher" "\0"
+            VALUE "InternalName", "P41Bootstrap" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 P41. All rights reserved." "\0"
+            VALUE "OriginalFilename", "P41Bootstrap.exe" "\0"
+            VALUE "ProductName", "P41 Bootstrap" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

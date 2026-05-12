@@ -26,7 +26,7 @@ class CashController extends ChangeNotifier {
   final CashApiService _apiService;
   final LocalStoreService _localStoreService;
   final List<CashShift> _history = [];
-  final String _deviceId = 'horsepos-stock-v2-macos';
+  final String _deviceId = 'p41-desktop';
   String _accessToken;
   SessionBranch _activeBranch;
   String _scopeKey;

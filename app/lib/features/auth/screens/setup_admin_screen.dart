@@ -96,7 +96,7 @@ class _SetupAdminScreenState extends State<SetupAdminScreen> {
                       setState(() => _isSubmitting = true);
                       await widget.onCreateAccount(
                         accountName: _accountController.text.trim().isEmpty
-                            ? 'HorsePos Cuenta'
+                            ? 'P41 Cuenta'
                             : _accountController.text.trim(),
                         ownerEmail: _emailController.text.trim(),
                         password: _passwordController.text.trim(),
@@ -296,7 +296,7 @@ class _AccessHero extends StatelessWidget {
               P41Logo(size: compact ? 34 : 44),
               const SizedBox(width: 14),
               Text(
-                'HorsePos',
+                'P41',
                 style: TextStyle(
                   fontSize: compact ? 18 : 20,
                   fontWeight: FontWeight.w700,

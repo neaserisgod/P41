@@ -7,11 +7,11 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:horsepos/app/app.dart';
+import 'package:p41/app/app.dart';
 
 void main() {
   testWidgets('renders default workspaces', (WidgetTester tester) async {
-    await tester.pumpWidget(const HorsePosStockV2App());
+    await tester.pumpWidget(const P41App());
 
     expect(find.text('POS'), findsOneWidget);
     expect(find.text('Inventario'), findsOneWidget);

@@ -28,7 +28,7 @@ class SalesController extends ChangeNotifier {
   final LocalStoreService _localStoreService;
   final List<SaleCartItem> _cartItems = [];
   final List<SaleTransaction> _transactions = [];
-  final String _deviceId = 'horsepos-stock-v2-macos';
+  final String _deviceId = 'p41-desktop';
   String _query = '';
   String _selectedCategory = 'Todos';
   String _accessToken;

@@ -1,11 +1,11 @@
 {
-    "name": "HorsePos",
-    "short_name": "HorsePos",
+    "name": "P41",
+    "short_name": "P41",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "HorsePos modular app shell for POS and inventory.",
+    "description": "P41 desktop-first POS and inventory app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

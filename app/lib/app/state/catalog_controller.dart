@@ -47,7 +47,7 @@ class CatalogController extends ChangeNotifier {
   final LocalStoreService _localStoreService;
   final List<CatalogProduct> _products = [];
   final List<InventorySpace> _manualLocations = [];
-  final String _deviceId = 'horsepos-stock-v2-macos';
+  final String _deviceId = 'p41-desktop';
   final Map<String, String> _supplierNamesById = {};
   String _accessToken;
   SessionBranch _activeBranch;

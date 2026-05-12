@@ -3,5 +3,5 @@ import 'package:flutter/material.dart';
 import 'app/app.dart';
 
 void main() {
-  runApp(const HorsePosStockV2App());
+  runApp(const P41App());
 }

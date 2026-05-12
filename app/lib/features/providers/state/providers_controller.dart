@@ -33,7 +33,7 @@ class ProvidersController extends ChangeNotifier {
   final LocalStoreService _localStoreService;
   final List<ProviderOrder> _orders = [];
   final Map<String, List<DraftOrderItem>> _draftItemsByProvider = {};
-  final String _deviceId = 'horsepos-stock-v2-macos';
+  final String _deviceId = 'p41-desktop';
   String _accessToken;
   SessionBranch _activeBranch;
   String _scopeKey;

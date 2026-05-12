@@ -38,7 +38,7 @@ class SessionPersistenceService {
 
   File get _legacyFile {
     final home = Platform.environment['HOME'] ?? '.';
-    return File('$home/.horsepos/session_v2.json');
+    return File('$home/.p41/session_v2.json');
   }
 
   Future<PersistedSession?> load() async {

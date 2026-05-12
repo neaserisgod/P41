@@ -134,6 +134,6 @@ class GlobalLookupLocalService {
   );
 
   Directory get _resourcesDir => Directory(
-    '${Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.'}${Platform.pathSeparator}.horsepos${Platform.pathSeparator}resources',
+    '${Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.'}${Platform.pathSeparator}.p41${Platform.pathSeparator}resources',
   );
 }

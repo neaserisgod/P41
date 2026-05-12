@@ -1,5 +1,5 @@
-name: horse_launcher
-description: "HorsePos Launcher"
+name: p41_bootstrap
+description: "Bootstrap launcher for the standalone P41 desktop app."
 publish_to: 'none'
 version: 1.1.0+0
 
@@ -9,12 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   google_fonts: ^8.0.0
   http: ^1.6.0
-  shared_preferences: ^2.5.4
-  path_provider: ^2.1.5
-  package_info_plus: ^9.0.1
   path: ^1.9.1
   archive: ^3.6.1
 

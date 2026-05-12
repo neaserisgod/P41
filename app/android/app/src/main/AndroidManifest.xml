@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="horsepos_stock_v2"
+        android:label="P41"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

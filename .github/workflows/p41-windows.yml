@@ -1,10 +1,25 @@
-name: Build P41 Windows
+name: Build P41 Bootstrap Windows
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publicar el instalador como GitHub Release
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: Tag del release manual, por ejemplo v1.0.0
+        required: false
+        type: string
   push:
     branches: [ main ]
+    tags:
+      - 'v*'
   pull_request:
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -67,13 +82,31 @@ jobs:
       - name: Upload launcher build
         uses: actions/upload-artifact@v4
         with:
-          name: p41-launcher-windows
+          name: p41-bootstrap-windows
           path: launcher/build/windows/**/Release/**
           if-no-files-found: error
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: p41-installer
+          name: p41-bootstrap-installer
           path: launcher/installer/output/*.exe
           if-no-files-found: error
+
+      - name: Publish installer release from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: launcher/installer/output/*.exe
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      - name: Publish installer release manually
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: P41 ${{ inputs.release_tag }}
+          files: launcher/installer/output/*.exe
+          generate_release_notes: true
+          fail_on_unmatched_files: true

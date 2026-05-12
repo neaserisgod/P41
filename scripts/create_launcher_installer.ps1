@@ -44,16 +44,20 @@ Remove-Item "$AppDistDir\*" -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item "$AppBuildOutputDir\*" -Destination $AppDistDir -Recurse -Force
 
 # 2. Rename executable if needed (legacy fallback)
-if ((-not (Test-Path "$DistDir\HorseLauncher.exe")) -and (Test-Path "$DistDir\launcher.exe")) {
-    Rename-Item -Path "$DistDir\launcher.exe" -NewName "HorseLauncher.exe" -Force
+if ((-not (Test-Path "$DistDir\P41Bootstrap.exe")) -and (Test-Path "$DistDir\launcher.exe")) {
+    Rename-Item -Path "$DistDir\launcher.exe" -NewName "P41Bootstrap.exe" -Force
 }
 
-if (-not (Test-Path "$DistDir\HorseLauncher.exe")) {
+if ((-not (Test-Path "$DistDir\P41Bootstrap.exe")) -and (Test-Path "$DistDir\HorseLauncher.exe")) {
+    Rename-Item -Path "$DistDir\HorseLauncher.exe" -NewName "P41Bootstrap.exe" -Force
+}
+
+if (-not (Test-Path "$DistDir\P41Bootstrap.exe")) {
     Write-Error "Bundled launcher executable not found in dist_launcher."
     exit 1
 }
 
-if ((-not (Test-Path "$AppDistDir\horsepos.exe")) -and (-not (Test-Path "$AppDistDir\horsepos_pro.exe")) -and (-not (Test-Path "$AppDistDir\Runner.exe"))) {
+if ((-not (Test-Path "$AppDistDir\p41.exe")) -and (-not (Test-Path "$AppDistDir\horsepos.exe")) -and (-not (Test-Path "$AppDistDir\horsepos_pro.exe")) -and (-not (Test-Path "$AppDistDir\Runner.exe"))) {
     Write-Error "Bundled app executable not found in dist_app."
     exit 1
 }

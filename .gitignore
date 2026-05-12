@@ -25,6 +25,7 @@
 launcher/dist_app/
 launcher/dist_launcher/
 launcher/installer/output/
+bootstrap/
 
 # Logs
 *.log

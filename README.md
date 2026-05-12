@@ -5,7 +5,7 @@ Repo aislado para el programa nuevo `P41`.
 ## Estructura
 
 - `app/`: app Flutter principal
-- `launcher/`: launcher/updater desktop
+- `launcher/`: bootstrap desktop propio de `P41`
 - `scripts/`: scripts de build y empaquetado para Windows
 - `.github/workflows/`: CI propia del repo
 

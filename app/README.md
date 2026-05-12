@@ -1,4 +1,4 @@
-# HorsePos Flutter Stock V2
+# P41
 
 Nuevo proyecto aislado para rediseñar el dominio de inventario alrededor de:
 

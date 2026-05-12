@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../models/report_models.dart';
 
 class ReportMarginSection extends StatelessWidget {
@@ -19,22 +20,45 @@ class ReportMarginSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = reports.firstWhere((report) => report.id == selectedSupplierId);
 
-    return Row(
-      children: [
-        Expanded(
-          flex: 34,
-          child: _SupplierList(
-            reports: reports,
-            selectedSupplierId: selectedSupplierId,
-            onSelectSupplier: onSelectSupplier,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 66,
-          child: _SupplierDetail(report: selected),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = constraints.viewport;
+        final stacked = constraints.maxWidth < 1040 || viewport.tightHeight;
+        return stacked
+            ? Column(
+                children: [
+                  SizedBox(
+                    height: viewport.shortHeight ? 200 : 232,
+                    child: _SupplierList(
+                      reports: reports,
+                      selectedSupplierId: selectedSupplierId,
+                      onSelectSupplier: onSelectSupplier,
+                    ),
+                  ),
+                  SizedBox(height: viewport.sectionGap),
+                  Expanded(
+                    child: _SupplierDetail(report: selected),
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    flex: 34,
+                    child: _SupplierList(
+                      reports: reports,
+                      selectedSupplierId: selectedSupplierId,
+                      onSelectSupplier: onSelectSupplier,
+                    ),
+                  ),
+                  SizedBox(width: viewport.sectionGap),
+                  Expanded(
+                    flex: 66,
+                    child: _SupplierDetail(report: selected),
+                  ),
+                ],
+              );
+      },
     );
   }
 }
@@ -168,49 +192,68 @@ class _SupplierDetail extends StatelessWidget {
               _MetricChip(label: 'Unidades vendidas', value: '${report.unitsSold}'),
             ],
           ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              _HeaderCell(flex: 28, label: 'Producto'),
-              _HeaderCell(flex: 14, label: 'Categoría'),
-              _HeaderCell(flex: 8, label: 'Stock', alignEnd: true),
-              _HeaderCell(flex: 14, label: 'Costo', alignEnd: true),
-              _HeaderCell(flex: 16, label: 'Stock \$', alignEnd: true),
-              _HeaderCell(flex: 8, label: 'Vend.', alignEnd: true),
-              _HeaderCell(flex: 12, label: 'Ingresos', alignEnd: true),
-              _HeaderCell(flex: 12, label: 'Ganancia', alignEnd: true),
-              _HeaderCell(flex: 12, label: 'Estado', alignEnd: true),
-            ],
-          ),
-          const SizedBox(height: 10),
           Expanded(
-            child: ListView.separated(
-              itemCount: report.products.length,
-              separatorBuilder: (context, index) => Divider(color: palette.border),
-              itemBuilder: (context, index) {
-                final product = report.products[index];
-                return Row(
-                  children: [
-                    Expanded(
-                      flex: 28,
-                      child: Text(
-                        product.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: palette.textStrong,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tableWidth =
+                    constraints.maxWidth < 940 ? 940.0 : constraints.maxWidth;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            _HeaderCell(flex: 28, label: 'Producto'),
+                            _HeaderCell(flex: 14, label: 'Categoría'),
+                            _HeaderCell(flex: 8, label: 'Stock', alignEnd: true),
+                            _HeaderCell(flex: 14, label: 'Costo', alignEnd: true),
+                            _HeaderCell(flex: 16, label: 'Stock \$', alignEnd: true),
+                            _HeaderCell(flex: 8, label: 'Vend.', alignEnd: true),
+                            _HeaderCell(flex: 12, label: 'Ingresos', alignEnd: true),
+                            _HeaderCell(flex: 12, label: 'Ganancia', alignEnd: true),
+                            _HeaderCell(flex: 12, label: 'Estado', alignEnd: true),
+                          ],
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: report.products.length,
+                            separatorBuilder: (context, index) =>
+                                Divider(color: palette.border),
+                            itemBuilder: (context, index) {
+                              final product = report.products[index];
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    flex: 28,
+                                    child: Text(
+                                      product.name,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: palette.textStrong,
+                                      ),
+                                    ),
+                                  ),
+                                  _ValueCell(flex: 14, value: product.category),
+                                  _ValueCell(flex: 8, value: '${product.stock}', alignEnd: true),
+                                  _ValueCell(flex: 14, value: _money(product.unitCost), alignEnd: true),
+                                  _ValueCell(flex: 16, value: _money(product.stockValueAtCost), alignEnd: true),
+                                  _ValueCell(flex: 8, value: '${product.unitsSold}', alignEnd: true),
+                                  _ValueCell(flex: 12, value: _money(product.salesRevenue), alignEnd: true),
+                                  _ValueCell(flex: 12, value: _money(product.grossProfit), alignEnd: true, success: true),
+                                  _ValueCell(flex: 12, value: product.status, alignEnd: true),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    _ValueCell(flex: 14, value: product.category),
-                    _ValueCell(flex: 8, value: '${product.stock}', alignEnd: true),
-                    _ValueCell(flex: 14, value: _money(product.unitCost), alignEnd: true),
-                    _ValueCell(flex: 16, value: _money(product.stockValueAtCost), alignEnd: true),
-                    _ValueCell(flex: 8, value: '${product.unitsSold}', alignEnd: true),
-                    _ValueCell(flex: 12, value: _money(product.salesRevenue), alignEnd: true),
-                    _ValueCell(flex: 12, value: _money(product.grossProfit), alignEnd: true, success: true),
-                    _ValueCell(flex: 12, value: product.status, alignEnd: true),
-                  ],
+                  ),
                 );
               },
             ),

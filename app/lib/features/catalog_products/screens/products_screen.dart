@@ -8,6 +8,7 @@ import '../../../app/models/global_catalog_product.dart';
 import '../../../app/models/inventory_space.dart';
 import '../../../app/models/product_pricing_rules.dart';
 import '../../../app/state/catalog_controller.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../../../app/widgets/product_image.dart';
 import '../../inventory/models/inventory_location.dart';
 import '../../inventory/view_models/inventory_view_model.dart';
@@ -71,10 +72,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
           return LayoutBuilder(
             builder: (context, constraints) {
-              final compact =
-                  constraints.maxWidth < 1180 || constraints.maxHeight < 760;
+              final viewport = constraints.viewport;
+              final compact = viewport.stackedPanels;
               return Padding(
-                padding: EdgeInsets.all(compact ? 14 : 18),
+                padding: EdgeInsets.all(viewport.pagePadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -91,7 +92,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       onCreate: () => _openEditor(),
                       onCreateSpace: _openLocationDialog,
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: viewport.sectionGap),
                     Expanded(
                       child: _viewMode == MerchandiseViewMode.products
                           ? _ProductsListPanel(
@@ -365,88 +366,108 @@ class _ProductsHeader extends StatelessWidget {
       );
     }
 
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Mercaderia',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: palette.textStrong,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = constraints.viewport;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: viewport.narrowWidth ? constraints.maxWidth : 240,
+                maxWidth: viewport.narrowWidth ? constraints.maxWidth : 320,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Mercaderia',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: palette.textStrong,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    statusText,
+                    style: TextStyle(fontSize: 12, color: palette.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: viewport.narrowWidth ? constraints.maxWidth : 280,
+              child: _ViewModeToggle(
+                value: viewMode,
+                onChanged: onViewModeChanged,
+              ),
+            ),
+            SizedBox(
+              width: viewport.narrowWidth ? constraints.maxWidth : 280,
+              child: TextField(
+                onChanged: onQueryChanged,
+                decoration: InputDecoration(
+                  hintText: viewMode == MerchandiseViewMode.products
+                      ? 'Buscar por nombre, SKU o lugar'
+                      : 'Buscar por mueble, heladera o producto',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  filled: true,
+                  fillColor: palette.surfaceMuted,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: palette.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: palette.border),
+                  ),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                statusText,
-                style: TextStyle(fontSize: 12, color: palette.textMuted),
-              ),
-            ],
-          ),
-        ),
-        _ViewModeToggle(value: viewMode, onChanged: onViewModeChanged),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 280,
-          child: TextField(
-            onChanged: onQueryChanged,
-            decoration: InputDecoration(
-              hintText: viewMode == MerchandiseViewMode.products
-                  ? 'Buscar por nombre, SKU o lugar'
-                  : 'Buscar por mueble, heladera o producto',
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: true,
-              fillColor: palette.surfaceMuted,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: palette.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: palette.border),
-              ),
             ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        if (viewMode == MerchandiseViewMode.spaces) ...[
-          OutlinedButton.icon(
-            onPressed: onCreateSpace,
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-              side: BorderSide(color: palette.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+            if (viewMode == MerchandiseViewMode.spaces)
+              OutlinedButton.icon(
+                onPressed: onCreateSpace,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 15,
+                  ),
+                  side: BorderSide(color: palette.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: const Icon(Icons.add_home_work_rounded),
+                label: const Text(
+                  'Agregar espacio',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            FilledButton.icon(
+              onPressed: onCreate,
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.warning,
+                foregroundColor: palette.textStrong,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 15,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text(
+                'Agregar producto',
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
-            icon: const Icon(Icons.add_home_work_rounded),
-            label: const Text(
-              'Agregar espacio',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-        FilledButton.icon(
-          onPressed: onCreate,
-          style: FilledButton.styleFrom(
-            backgroundColor: palette.warning,
-            foregroundColor: palette.textStrong,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'Agregar producto',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -503,7 +524,7 @@ class _ViewModeToggle extends StatelessWidget {
     }
 
     return Container(
-      width: 280,
+      width: double.infinity,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white,

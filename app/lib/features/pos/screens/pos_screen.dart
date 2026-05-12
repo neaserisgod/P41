@@ -4,6 +4,7 @@ import '../../../app/app.dart';
 import '../../../app/models/catalog_product.dart';
 import '../../../app/models/session_context.dart';
 import '../../../app/state/catalog_controller.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../../cash_management/models/cash_shift.dart';
 import '../models/sale_models.dart';
 import '../state/sales_controller.dart';
@@ -67,10 +68,10 @@ class _PosScreenState extends State<PosScreen> {
       color: palette.surface,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final viewport = constraints.viewport;
           final roomy = constraints.maxWidth >= 1500;
-          final stacked =
-              constraints.maxWidth < 1180 || constraints.maxHeight < 760;
-          final outerPadding = roomy ? 26.0 : (stacked ? 16.0 : 22.0);
+          final stacked = viewport.stackedPanels;
+          final outerPadding = roomy ? 26.0 : viewport.pagePadding;
 
           return AnimatedBuilder(
             animation: Listenable.merge([
@@ -111,7 +112,7 @@ class _PosScreenState extends State<PosScreen> {
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 300,
+                                      height: viewport.shortHeight ? 276 : 300,
                                       child: _buildCartPanel(context),
                                     ),
                                   ],
@@ -224,27 +225,35 @@ class _ProductPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PosSearchBar(
-          controller: controller,
-          onChanged: salesController.setQuery,
-        ),
-        const SizedBox(height: 12),
-        PosCategoryStrip(
-          categories: categories,
-          selectedCategory: salesController.selectedCategory,
-          onSelect: salesController.selectCategory,
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: PosProductGrid(
-            products: visibleProducts,
-            onSelectProduct: salesController.addProduct,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = constraints.viewport;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PosSearchBar(
+              controller: controller,
+              onChanged: salesController.setQuery,
+            ),
+            SizedBox(height: viewport.shortHeight ? 10 : 12),
+            SizedBox(
+              height: viewport.shortHeight ? 40 : 44,
+              child: PosCategoryStrip(
+                categories: categories,
+                selectedCategory: salesController.selectedCategory,
+                onSelect: salesController.selectCategory,
+              ),
+            ),
+            SizedBox(height: viewport.shortHeight ? 10 : 12),
+            Expanded(
+              child: PosProductGrid(
+                products: visibleProducts,
+                onSelectProduct: salesController.addProduct,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

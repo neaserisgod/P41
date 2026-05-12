@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app.dart';
 import '../models/session_context.dart';
 import '../models/workspace_tab.dart';
+import 'desktop_viewport.dart';
 import '../../features/cash_management/models/cash_shift.dart';
 import '../../features/cash_management/widgets/cash_status_card.dart';
 
@@ -39,9 +40,10 @@ class SideNavigationPanel extends StatelessWidget {
     final palette = context.palette;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxHeight < 820;
+        final viewport = constraints.viewport;
+        final compact = viewport.compactHeight;
         return Container(
-          width: compact ? 228 : 244,
+          width: viewport.shortHeight ? 220 : (compact ? 228 : 244),
           decoration: BoxDecoration(
             color: palette.surface,
             border: Border(right: BorderSide(color: palette.border)),
@@ -76,7 +78,17 @@ class SideNavigationPanel extends StatelessWidget {
                       ),
                     ],
                     SizedBox(height: compact ? 8 : 10),
-                    CashStatusCard(shift: shift, onPrimaryAction: onCashAction),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: viewport.shortHeight ? 120 : 156,
+                      ),
+                      child: SingleChildScrollView(
+                        child: CashStatusCard(
+                          shift: shift,
+                          onPrimaryAction: onCashAction,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

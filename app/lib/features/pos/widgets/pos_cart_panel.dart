@@ -33,114 +33,128 @@ class PosCartPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Opacity(
-      opacity: enabled ? 1 : 0.68,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: palette.border),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x12000000),
-              blurRadius: 18,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Venta',
-              style: TextStyle(
-                color: palette.textStrong,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '$cartUnits ítems',
-              style: TextStyle(
-                color: palette.textMuted,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: items.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No agregaste productos.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: palette.textMuted,
-                        ),
-                      ),
-                    )
-                  : ListView.separated(
-                      itemCount: items.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return CartRow(
-                          item: item,
-                          onIncrease: () => onIncreaseItem(item.product.id),
-                          onDecrease: () => onDecreaseItem(item.product.id),
-                        );
-                      },
-                    ),
-            ),
-            Divider(color: palette.border),
-            const SizedBox(height: 12),
-            TotalLine(label: 'Subtotal', value: _money(subtotal)),
-            const SizedBox(height: 8),
-            TotalLine(label: 'Descuento', value: discount > 0 ? '- ${_money(discount)}' : '\$0'),
-            const SizedBox(height: 8),
-            TotalLine(label: 'Total', value: _money(total), emphasized: true),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: GhostAction(
-                    label: 'Cobrar efectivo',
-                    enabled: enabled && items.isNotEmpty && !isProcessing,
-                    onPressed: () async => onCheckout('Efectivo'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: GhostAction(
-                    label: 'Cobrar transferencia',
-                    enabled: enabled && items.isNotEmpty && !isProcessing,
-                    onPressed: () async => onCheckout('Transferencia'),
-                  ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 420 || constraints.maxWidth < 340;
+        final buttonWidth = constraints.maxWidth < 420
+            ? constraints.maxWidth
+            : (constraints.maxWidth - 10) / 2;
+        return Opacity(
+          opacity: enabled ? 1 : 0.68,
+          child: Container(
+            padding: EdgeInsets.all(compact ? 14 : 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: palette.border),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x12000000),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: GhostAction(
-                label: 'Cobrar tarjeta',
-                enabled: enabled && items.isNotEmpty && !isProcessing,
-                onPressed: () async => onCheckout('Tarjeta'),
-              ),
-            ),
-            if (isProcessing) ...[
-              const SizedBox(height: 12),
-              const Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2.4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Venta',
+                  style: TextStyle(
+                    color: palette.textStrong,
+                    fontSize: compact ? 20 : 22,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+                const SizedBox(height: 6),
+                Text(
+                  '$cartUnits ítems',
+                  style: TextStyle(
+                    color: palette.textMuted,
+                  ),
+                ),
+                SizedBox(height: compact ? 12 : 16),
+                Expanded(
+                  child: items.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No agregaste productos.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: palette.textMuted,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: items.length,
+                          separatorBuilder: (context, index) =>
+                              SizedBox(height: compact ? 8 : 10),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return CartRow(
+                              item: item,
+                              onIncrease: () => onIncreaseItem(item.product.id),
+                              onDecrease: () => onDecreaseItem(item.product.id),
+                            );
+                          },
+                        ),
+                ),
+                Divider(color: palette.border),
+                SizedBox(height: compact ? 8 : 12),
+                TotalLine(label: 'Subtotal', value: _money(subtotal)),
+                const SizedBox(height: 8),
+                TotalLine(
+                  label: 'Descuento',
+                  value: discount > 0 ? '- ${_money(discount)}' : '\$0',
+                ),
+                const SizedBox(height: 8),
+                TotalLine(label: 'Total', value: _money(total), emphasized: true),
+                SizedBox(height: compact ? 14 : 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    SizedBox(
+                      width: buttonWidth,
+                      child: GhostAction(
+                        label: 'Cobrar efectivo',
+                        enabled: enabled && items.isNotEmpty && !isProcessing,
+                        onPressed: () async => onCheckout('Efectivo'),
+                      ),
+                    ),
+                    SizedBox(
+                      width: buttonWidth,
+                      child: GhostAction(
+                        label: 'Cobrar transferencia',
+                        enabled: enabled && items.isNotEmpty && !isProcessing,
+                        onPressed: () async => onCheckout('Transferencia'),
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: GhostAction(
+                        label: 'Cobrar tarjeta',
+                        enabled: enabled && items.isNotEmpty && !isProcessing,
+                        onPressed: () async => onCheckout('Tarjeta'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (isProcessing) ...[
+                  const SizedBox(height: 12),
+                  const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

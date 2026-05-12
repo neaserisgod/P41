@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app.dart';
 import '../../../app/models/session_context.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../models/cash_shift.dart';
 import '../state/cash_controller.dart';
 
@@ -39,10 +40,10 @@ class CashManagementScreen extends StatelessWidget {
 
           return LayoutBuilder(
             builder: (context, constraints) {
-              final stacked =
-                  constraints.maxWidth < 1180 || constraints.maxHeight < 760;
+              final viewport = constraints.viewport;
+              final stacked = viewport.stackedPanels;
               return Padding(
-                padding: EdgeInsets.all(stacked ? 16 : 22),
+                padding: EdgeInsets.all(viewport.pagePadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -68,15 +69,15 @@ class CashManagementScreen extends StatelessWidget {
                         ),
                       ),
                     ],
-                    SizedBox(height: stacked ? 12 : 18),
+                    SizedBox(height: viewport.sectionGap),
                     Expanded(
                       child: stacked
                           ? Column(
                               children: [
                                 SizedBox(
                                   height: cashController.separateCigarettes
-                                      ? 280
-                                      : 180,
+                                      ? (viewport.shortHeight ? 250 : 280)
+                                      : (viewport.shortHeight ? 164 : 180),
                                   child: _CurrentCashPanel(
                                     generalShift: currentShift,
                                     cigaretteShift: cigaretteShift,
@@ -84,7 +85,7 @@ class CashManagementScreen extends StatelessWidget {
                                         cashController.separateCigarettes,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: viewport.sectionGap),
                                 Expanded(
                                   child: _CashHistoryPanel(history: history),
                                 ),
@@ -101,7 +102,7 @@ class CashManagementScreen extends StatelessWidget {
                                         cashController.separateCigarettes,
                                   ),
                                 ),
-                                const SizedBox(width: 18),
+                                SizedBox(width: viewport.sectionGap),
                                 Expanded(
                                   flex: 62,
                                   child: _CashHistoryPanel(history: history),
@@ -236,8 +237,10 @@ class _CashHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                spacing: 14,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -256,7 +259,6 @@ class _CashHeader extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(width: 14),
                   FilledButton.icon(
                     onPressed: onCashAction,
                     style: FilledButton.styleFrom(

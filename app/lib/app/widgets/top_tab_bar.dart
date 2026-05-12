@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app.dart';
 import '../models/workspace_tab.dart';
+import 'desktop_viewport.dart';
 import 'p41_logo.dart';
 
 class TopTabBar extends StatelessWidget {
@@ -29,10 +30,13 @@ class TopTabBar extends StatelessWidget {
     final palette = context.palette;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 1180;
-        final leftInset = compact ? 180.0 : 280.0;
+        final viewport = constraints.viewport;
+        final compact = viewport.tightWidth;
+        final leftInset = viewport.narrowWidth
+            ? 140.0
+            : (compact ? 180.0 : 280.0);
         return SizedBox(
-          height: compact ? 60 : 64,
+          height: viewport.shortHeight ? 56 : (compact ? 60 : 64),
           child: Stack(
             children: [
               Align(
@@ -40,34 +44,40 @@ class TopTabBar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(width: 8),
+                    SizedBox(width: viewport.narrowWidth ? 4 : 8),
                     P41Logo(size: compact ? 22 : 24),
-                    const SizedBox(width: 10),
-                    TextButton.icon(
-                      onPressed: onToggleSidebar,
-                      style: TextButton.styleFrom(
-                        foregroundColor: palette.textStrong,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: compact ? 6 : 8,
-                          vertical: compact ? 8 : 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                    SizedBox(width: viewport.narrowWidth ? 6 : 10),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: viewport.narrowWidth ? 164 : 244,
                       ),
-                      icon: Icon(
-                        Icons.menu_rounded,
-                        size: compact ? 18 : 20,
-                        color: isSidebarOpen
-                            ? palette.warning
-                            : palette.textStrong,
-                      ),
-                      label: Text(
-                        headerTitle,
-                        style: TextStyle(
-                          fontSize: compact ? 14 : 15,
-                          fontWeight: FontWeight.w800,
-                          color: palette.textStrong,
+                      child: TextButton.icon(
+                        onPressed: onToggleSidebar,
+                        style: TextButton.styleFrom(
+                          foregroundColor: palette.textStrong,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compact ? 6 : 8,
+                            vertical: compact ? 8 : 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: Icon(
+                          Icons.menu_rounded,
+                          size: compact ? 18 : 20,
+                          color: isSidebarOpen
+                              ? palette.warning
+                              : palette.textStrong,
+                        ),
+                        label: Text(
+                          headerTitle,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: compact ? 14 : 15,
+                            fontWeight: FontWeight.w800,
+                            color: palette.textStrong,
+                          ),
                         ),
                       ),
                     ),
@@ -79,7 +89,7 @@ class TopTabBar extends StatelessWidget {
                   child: Padding(
                     padding: EdgeInsets.only(
                       left: leftInset,
-                      right: compact ? 20 : 28,
+                      right: viewport.narrowWidth ? 12 : (compact ? 20 : 28),
                     ),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -98,7 +108,7 @@ class TopTabBar extends StatelessWidget {
                                   : (kind) => onReplaceSlot(index, kind),
                             ),
                             if (index != tabs.length - 1)
-                              const SizedBox(width: 8),
+                              SizedBox(width: viewport.shortHeight ? 6 : 8),
                           ],
                         ],
                       ),
@@ -153,8 +163,8 @@ class _ShellTab extends StatelessWidget {
         borderRadius: BorderRadius.circular(centered ? 18 : 16),
         child: Container(
           constraints: BoxConstraints(
-            minWidth: centered ? (compact ? 150 : 180) : (compact ? 122 : 136),
-            maxWidth: centered ? (compact ? 176 : 210) : (compact ? 148 : 166),
+            minWidth: centered ? (compact ? 138 : 180) : (compact ? 112 : 136),
+            maxWidth: centered ? (compact ? 168 : 210) : (compact ? 140 : 166),
           ),
           height: centered ? (compact ? 42 : 46) : (compact ? 38 : 42),
           padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 14),

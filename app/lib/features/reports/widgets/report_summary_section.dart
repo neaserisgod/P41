@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../models/report_models.dart';
 
 class ReportSummarySection extends StatelessWidget {
@@ -13,40 +14,60 @@ class ReportSummarySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = constraints.viewport;
+        final stacked = constraints.maxWidth < 980 || viewport.tightHeight;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _KpiCard(label: 'Stock valorizado', value: _money(snapshot.stockValueAtCost)),
-            _KpiCard(label: 'Ingresos', value: _money(snapshot.income)),
-            _KpiCard(label: 'Invertido', value: _money(snapshot.investment)),
-            _KpiCard(label: 'Costo vendido', value: _money(snapshot.soldCost)),
-            _KpiCard(label: 'Ganancia bruta', value: _money(snapshot.grossProfit)),
-            _KpiCard(label: 'Ganancia %', value: '${snapshot.grossProfitPercent.toStringAsFixed(1)}%'),
-            _KpiCard(label: 'Ventas', value: '${snapshot.salesCount}'),
-            _KpiCard(label: 'Ticket promedio', value: _money(snapshot.averageTicket)),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _KpiCard(label: 'Stock valorizado', value: _money(snapshot.stockValueAtCost)),
+                _KpiCard(label: 'Ingresos', value: _money(snapshot.income)),
+                _KpiCard(label: 'Invertido', value: _money(snapshot.investment)),
+                _KpiCard(label: 'Costo vendido', value: _money(snapshot.soldCost)),
+                _KpiCard(label: 'Ganancia bruta', value: _money(snapshot.grossProfit)),
+                _KpiCard(label: 'Ganancia %', value: '${snapshot.grossProfitPercent.toStringAsFixed(1)}%'),
+                _KpiCard(label: 'Ventas', value: '${snapshot.salesCount}'),
+                _KpiCard(label: 'Ticket promedio', value: _money(snapshot.averageTicket)),
+              ],
+            ),
+            SizedBox(height: viewport.sectionGap),
+            Expanded(
+              child: stacked
+                  ? Column(
+                      children: [
+                        Expanded(
+                          flex: viewport.shortHeight ? 46 : 48,
+                          child: _TrendPanel(points: snapshot.trendPoints),
+                        ),
+                        SizedBox(height: viewport.sectionGap),
+                        Expanded(
+                          flex: viewport.shortHeight ? 54 : 52,
+                          child: _HighlightsPanel(products: snapshot.topHighlights),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          flex: 58,
+                          child: _TrendPanel(points: snapshot.trendPoints),
+                        ),
+                        SizedBox(width: viewport.sectionGap),
+                        Expanded(
+                          flex: 42,
+                          child: _HighlightsPanel(products: snapshot.topHighlights),
+                        ),
+                      ],
+                    ),
+            ),
           ],
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                flex: 58,
-                child: _TrendPanel(points: snapshot.trendPoints),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 42,
-                child: _HighlightsPanel(products: snapshot.topHighlights),
-              ),
-            ],
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

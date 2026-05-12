@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/app.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../../../app/state/catalog_controller.dart';
 import '../../cash_management/state/cash_controller.dart';
 import '../../pos/state/sales_controller.dart';
@@ -67,10 +68,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
         animation: _viewModel,
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {
-            final stacked =
-                constraints.maxWidth < 1180 || constraints.maxHeight < 760;
+            final viewport = constraints.viewport;
+            final stacked = viewport.stackedPanels;
             return Padding(
-              padding: EdgeInsets.all(stacked ? 14 : 18),
+              padding: EdgeInsets.all(viewport.pagePadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -79,19 +80,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     period: _viewModel.selectedPeriod,
                     onSelectPeriod: _viewModel.selectPeriod,
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: viewport.sectionGap),
                   Expanded(
                     child: stacked
                         ? Column(
                             children: [
                               SizedBox(
-                                height: 184,
+                                height: viewport.shortHeight ? 156 : 184,
                                 child: ReportsSectionList(
                                   selectedSection: _viewModel.selectedSection,
                                   onSelect: _viewModel.selectSection,
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              SizedBox(height: viewport.sectionGap),
                               Expanded(
                                 child: _ReportWorkspace(viewModel: _viewModel),
                               ),
@@ -106,7 +107,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   onSelect: _viewModel.selectSection,
                                 ),
                               ),
-                              const SizedBox(width: 14),
+                              SizedBox(width: viewport.sectionGap),
                               Expanded(
                                 flex: 76,
                                 child: _ReportWorkspace(viewModel: _viewModel),

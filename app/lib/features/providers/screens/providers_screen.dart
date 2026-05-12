@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/app.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../models/provider_record.dart';
 import '../state/providers_controller.dart';
 import '../widgets/provider_detail_panel.dart';
@@ -87,9 +88,10 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         animation: widget.controller,
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {
-            final stacked = constraints.maxWidth < 1180 || constraints.maxHeight < 760;
+            final viewport = constraints.viewport;
+            final stacked = viewport.stackedPanels;
             return Padding(
-              padding: EdgeInsets.all(stacked ? 14 : 18),
+              padding: EdgeInsets.all(viewport.pagePadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -97,7 +99,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                     onCreate: () => _openProviderForm(),
                     count: widget.controller.providers.length,
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: viewport.sectionGap),
                   if (widget.controller.errorMessage != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -127,7 +129,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                                 ? Column(
                                     children: [
                                       SizedBox(
-                                        height: 220,
+                                        height: viewport.shortHeight ? 184 : 220,
                                         child: ProvidersList(
                                           records: widget.controller.providers,
                                           selectedId: selectedProvider.id,
@@ -139,7 +141,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                                           },
                                         ),
                                       ),
-                                      const SizedBox(height: 12),
+                                      SizedBox(height: viewport.sectionGap),
                                       Expanded(
                                         child: ProviderDetailPanel(
                                           record: selectedProvider,
@@ -181,7 +183,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                                           },
                                         ),
                                       ),
-                                      const SizedBox(width: 14),
+                                      SizedBox(width: viewport.sectionGap),
                                       Expanded(
                                         flex: 60,
                                         child: ProviderDetailPanel(

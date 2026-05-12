@@ -1,0 +1,17 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+/build/
+/coverage/
+/dist_app/
+/dist_launcher/
+/installer/output/
+/macos/Flutter/ephemeral/
+/macos/Pods/
+/macos/Runner/GeneratedPluginRegistrant.swift
+/windows/flutter/ephemeral/
+/windows/flutter/generated_plugin_registrant.cc
+/windows/flutter/generated_plugin_registrant.h
+/windows/flutter/generated_plugins.cmake

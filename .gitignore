@@ -1,0 +1,30 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Flutter / Dart
+**/.dart_tool/
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub/
+**/pubspec_overrides.yaml
+
+# Native dependency output
+**/Pods/
+**/.symlinks/
+**/GeneratedPluginRegistrant.*
+**/Flutter/ephemeral/
+**/flutter/ephemeral/
+
+# Platform local files
+**/android/local.properties
+
+# Installer output
+launcher/dist_app/
+launcher/dist_launcher/
+launcher/installer/output/
+
+# Logs
+*.log

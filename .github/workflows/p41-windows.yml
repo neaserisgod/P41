@@ -1,0 +1,79 @@
+name: Build P41 Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Flutter pub get app
+        shell: pwsh
+        working-directory: app
+        run: |
+          flutter pub get
+
+      - name: Flutter pub get launcher
+        shell: pwsh
+        working-directory: launcher
+        run: |
+          flutter pub get
+
+      - name: Analyze app
+        shell: pwsh
+        working-directory: app
+        run: |
+          flutter analyze
+
+      - name: Analyze launcher
+        shell: pwsh
+        working-directory: launcher
+        run: |
+          flutter analyze
+
+      - name: Build app
+        shell: pwsh
+        run: |
+          ./scripts/build_pos.ps1 -RunCodegen Auto
+
+      - name: Build launcher
+        shell: pwsh
+        run: |
+          ./scripts/build_launcher.ps1
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          ./scripts/create_launcher_installer.ps1
+
+      - name: Upload launcher build
+        uses: actions/upload-artifact@v4
+        with:
+          name: p41-launcher-windows
+          path: launcher/build/windows/**/Release/**
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: p41-installer
+          path: launcher/installer/output/*.exe
+          if-no-files-found: error

@@ -69,6 +69,30 @@ jobs:
         run: |
           ./scripts/build_pos.ps1 -RunCodegen Auto
 
+      - name: Package app update zip
+        shell: pwsh
+        run: |
+          $VersionLine = Select-String -Path "app\pubspec.yaml" -Pattern "^version: " | Select-Object -First 1
+          $Version = ($VersionLine.Line -replace "version: ", "").Trim()
+          $ShortVersion = ($Version -split "\+")[0]
+          $BuildOutputCandidates = @(
+            "app\build\windows\x64\runner\Release",
+            "app\build\windows\runner\Release"
+          )
+          $BuildOutputDir = $BuildOutputCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $BuildOutputDir) {
+            throw "App build output directory not found."
+          }
+          $VersionJsonPath = Join-Path $BuildOutputDir "version.json"
+          @{ version = $Version } | ConvertTo-Json | Set-Content -Path $VersionJsonPath
+          $PackageDir = "release-assets"
+          New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
+          $ZipPath = Join-Path $PackageDir "p41-windows-v$ShortVersion.zip"
+          if (Test-Path $ZipPath) {
+            Remove-Item $ZipPath -Force
+          }
+          Compress-Archive -Path "$BuildOutputDir\*" -DestinationPath $ZipPath -Force
+
       - name: Build launcher
         shell: pwsh
         run: |
@@ -86,6 +110,13 @@ jobs:
           path: launcher/build/windows/**/Release/**
           if-no-files-found: error
 
+      - name: Upload app update zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: p41-windows-app-update
+          path: release-assets/p41-windows-v*.zip
+          if-no-files-found: error
+
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
@@ -97,7 +128,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: launcher/installer/output/*.exe
+          files: |
+            launcher/installer/output/*.exe
+            release-assets/p41-windows-v*.zip
           generate_release_notes: true
           fail_on_unmatched_files: true
 
@@ -107,6 +140,8 @@ jobs:
         with:
           tag_name: ${{ inputs.release_tag }}
           name: P41 ${{ inputs.release_tag }}
-          files: launcher/installer/output/*.exe
+          files: |
+            launcher/installer/output/*.exe
+            release-assets/p41-windows-v*.zip
           generate_release_notes: true
           fail_on_unmatched_files: true

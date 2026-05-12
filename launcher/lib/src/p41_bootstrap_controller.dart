@@ -313,6 +313,36 @@ class P41BootstrapController extends ChangeNotifier {
     await targetDir.create(recursive: true);
     final archive = ZipDecoder().decodeBytes(await zipFile.readAsBytes());
     extractArchiveToDisk(archive, targetDir.path);
+    await _normalizeImagesBootstrapLayout(targetDir);
+  }
+
+  Future<void> _normalizeImagesBootstrapLayout(Directory targetDir) async {
+    final nestedDir = Directory(
+      p.join(targetDir.path, _imagesBootstrapFolder),
+    );
+    if (!await nestedDir.exists()) {
+      return;
+    }
+
+    final rootHasImages = await targetDir
+        .list(followLinks: false)
+        .where((entity) => entity is File)
+        .cast<File>()
+        .any((file) => file.path.toLowerCase().endsWith('.jpg'));
+    if (rootHasImages) {
+      return;
+    }
+
+    await for (final entity in nestedDir.list(followLinks: false)) {
+      final destinationPath = p.join(targetDir.path, p.basename(entity.path));
+      if (entity is File) {
+        await entity.rename(destinationPath);
+      } else if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destinationPath));
+        await entity.delete(recursive: true);
+      }
+    }
+    await nestedDir.delete(recursive: true);
   }
 
   Future<Map<String, String>> _readInstalledResourceVersions() async {

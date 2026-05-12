@@ -119,10 +119,18 @@ class GlobalLookupLocalService {
     if (barcode.isEmpty) {
       return '';
     }
-    final file = File(
-      '${_imagesDir.path}${Platform.pathSeparator}$barcode.jpg',
-    );
-    return file.existsSync() ? file.path : '';
+    final candidates = <File>[
+      File('${_imagesDir.path}${Platform.pathSeparator}$barcode.jpg'),
+      File(
+        '${_imagesDir.path}${Platform.pathSeparator}imagenes_productos${Platform.pathSeparator}$barcode.jpg',
+      ),
+    ];
+    for (final file in candidates) {
+      if (file.existsSync()) {
+        return file.path;
+      }
+    }
+    return '';
   }
 
   File get _catalogFile => File(

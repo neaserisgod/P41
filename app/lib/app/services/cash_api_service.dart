@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../config/p41_backend_config.dart';
+
 class CashApiException implements Exception {
   const CashApiException(this.message, {this.statusCode});
 
@@ -16,7 +18,7 @@ class CashApiException implements Exception {
 
 class CashApiService {
   CashApiService({
-    this.baseUrl = 'http://127.0.0.1:8010',
+    this.baseUrl = P41BackendConfig.apiBaseUrl,
   }) {
     _client.connectionTimeout = const Duration(seconds: 6);
   }
@@ -56,10 +58,10 @@ class CashApiService {
       return parsed;
     } on TimeoutException {
       debugPrint('CashApiService timeout -> /api/shifts/current');
-      throw const CashApiException('Tiempo de espera agotado con el servidor local');
+      throw const CashApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('CashApiService socket exception -> /api/shifts/current');
-      throw const CashApiException('No se pudo conectar con el servidor local');
+      throw const CashApiException('No se pudo conectar con el backend VPS');
     }
   }
 
@@ -145,10 +147,10 @@ class CashApiService {
       return parsed;
     } on TimeoutException {
       debugPrint('CashApiService timeout -> $path');
-      throw const CashApiException('Tiempo de espera agotado con el servidor local');
+      throw const CashApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('CashApiService socket exception -> $path');
-      throw const CashApiException('No se pudo conectar con el servidor local');
+      throw const CashApiException('No se pudo conectar con el backend VPS');
     }
   }
 
@@ -175,10 +177,10 @@ class CashApiService {
       return parsed.whereType<Map<String, dynamic>>().toList();
     } on TimeoutException {
       debugPrint('CashApiService timeout -> $path');
-      throw const CashApiException('Tiempo de espera agotado con el servidor local');
+      throw const CashApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('CashApiService socket exception -> $path');
-      throw const CashApiException('No se pudo conectar con el servidor local');
+      throw const CashApiException('No se pudo conectar con el backend VPS');
     }
   }
 }

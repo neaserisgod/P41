@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../config/p41_backend_config.dart';
+
 class SessionApiException implements Exception {
   const SessionApiException(this.message, {this.statusCode});
 
@@ -92,7 +94,7 @@ class SessionBootstrapPayload {
 
 class SessionApiService {
   SessionApiService({
-    this.baseUrl = 'http://127.0.0.1:8010',
+    this.baseUrl = P41BackendConfig.apiBaseUrl,
   }) {
     _client.connectionTimeout = const Duration(seconds: 6);
   }
@@ -446,10 +448,10 @@ class SessionApiService {
       return parsed;
     } on TimeoutException {
       debugPrint('SessionApiService._request timeout -> $path');
-      throw const SessionApiException('Tiempo de espera agotado con el servidor local');
+      throw const SessionApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('SessionApiService._request socket exception -> $path');
-      throw const SessionApiException('No se pudo conectar con el servidor local');
+      throw const SessionApiException('No se pudo conectar con el backend VPS');
     }
   }
 
@@ -485,10 +487,10 @@ class SessionApiService {
       return parsed;
     } on TimeoutException {
       debugPrint('SessionApiService._requestList timeout -> $path');
-      throw const SessionApiException('Tiempo de espera agotado con el servidor local');
+      throw const SessionApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('SessionApiService._requestList socket exception -> $path');
-      throw const SessionApiException('No se pudo conectar con el servidor local');
+      throw const SessionApiException('No se pudo conectar con el backend VPS');
     }
   }
 }

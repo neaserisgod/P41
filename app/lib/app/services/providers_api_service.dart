@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../config/p41_backend_config.dart';
+
 class ProvidersApiException implements Exception {
   const ProvidersApiException(this.message, {this.statusCode});
 
@@ -16,7 +18,7 @@ class ProvidersApiException implements Exception {
 
 class ProvidersApiService {
   ProvidersApiService({
-    this.baseUrl = 'http://127.0.0.1:8010',
+    this.baseUrl = P41BackendConfig.apiBaseUrl,
   }) {
     _client.connectionTimeout = const Duration(seconds: 6);
   }
@@ -141,10 +143,10 @@ class ProvidersApiService {
       return parsed;
     } on TimeoutException {
       debugPrint('ProvidersApiService timeout -> $path');
-      throw const ProvidersApiException('Tiempo de espera agotado con el servidor local');
+      throw const ProvidersApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('ProvidersApiService socket exception -> $path');
-      throw const ProvidersApiException('No se pudo conectar con el servidor local');
+      throw const ProvidersApiException('No se pudo conectar con el backend VPS');
     }
   }
 
@@ -174,10 +176,10 @@ class ProvidersApiService {
       return parsed.whereType<Map<String, dynamic>>().toList();
     } on TimeoutException {
       debugPrint('ProvidersApiService timeout -> $path');
-      throw const ProvidersApiException('Tiempo de espera agotado con el servidor local');
+      throw const ProvidersApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('ProvidersApiService socket exception -> $path');
-      throw const ProvidersApiException('No se pudo conectar con el servidor local');
+      throw const ProvidersApiException('No se pudo conectar con el backend VPS');
     }
   }
 }

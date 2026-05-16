@@ -17,11 +17,15 @@ Repo aislado para el programa nuevo `P41`.
 ./scripts/build_pos.ps1 -RunCodegen Auto
 ```
 
+Build por defecto contra `http://31.97.166.250`.
+
 ### Launcher
 
 ```powershell
 ./scripts/build_launcher.ps1
 ```
+
+El launcher queda apuntando al VPS para `version.json`, catálogo global e imágenes bootstrap.
 
 ### Instalador
 

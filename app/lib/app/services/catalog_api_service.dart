@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../config/p41_backend_config.dart';
 import '../models/global_catalog_product.dart';
 import 'global_lookup_local_service.dart';
 
@@ -26,7 +27,7 @@ class CatalogSyncPayload {
 
 class CatalogApiService {
   CatalogApiService({
-    this.baseUrl = 'http://127.0.0.1:8010',
+    this.baseUrl = P41BackendConfig.apiBaseUrl,
     GlobalLookupLocalService? localLookup,
   }) : _localLookup = localLookup ?? const GlobalLookupLocalService() {
     _client.connectionTimeout = const Duration(seconds: 6);
@@ -182,12 +183,12 @@ class CatalogApiService {
     } on TimeoutException {
       debugPrint('CatalogApiService._request timeout -> $path');
       throw const CatalogApiException(
-        'Tiempo de espera agotado con el servidor local',
+        'Tiempo de espera agotado con el backend VPS',
       );
     } on SocketException {
       debugPrint('CatalogApiService._request socket exception -> $path');
       throw const CatalogApiException(
-        'No se pudo conectar con el servidor local',
+        'No se pudo conectar con el backend VPS',
       );
     }
   }
@@ -226,12 +227,12 @@ class CatalogApiService {
     } on TimeoutException {
       debugPrint('CatalogApiService._requestPublic timeout -> $path');
       throw const CatalogApiException(
-        'Tiempo de espera agotado con el servidor local',
+        'Tiempo de espera agotado con el backend VPS',
       );
     } on SocketException {
       debugPrint('CatalogApiService._requestPublic socket exception -> $path');
       throw const CatalogApiException(
-        'No se pudo conectar con el servidor local',
+        'No se pudo conectar con el backend VPS',
       );
     }
   }

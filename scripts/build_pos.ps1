@@ -1,7 +1,8 @@
 param(
     [ValidateSet("Auto", "Always", "Never")]
     [string]$RunCodegen = "Auto",
-    [switch]$FullRebuild = $false
+    [switch]$FullRebuild = $false,
+    [string]$BackendBaseUrl = "http://31.97.166.250"
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,7 +90,7 @@ if ($shouldRunCodegen) {
     Write-Host "Skipping build_runner for fast deploy path." -ForegroundColor Green
 }
 
-flutter build windows --release
+flutter build windows --release --dart-define="P41_API_BASE_URL=$BackendBaseUrl"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed!" -ForegroundColor Red
     throw "flutter build windows --release failed."

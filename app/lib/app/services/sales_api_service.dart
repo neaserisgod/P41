@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../config/p41_backend_config.dart';
+
 class SalesApiException implements Exception {
   const SalesApiException(this.message, {this.statusCode});
 
@@ -16,7 +18,7 @@ class SalesApiException implements Exception {
 
 class SalesApiService {
   SalesApiService({
-    this.baseUrl = 'http://127.0.0.1:8010',
+    this.baseUrl = P41BackendConfig.apiBaseUrl,
   }) {
     _client.connectionTimeout = const Duration(seconds: 6);
   }
@@ -78,13 +80,13 @@ class SalesApiService {
       return parsed;
     } on TimeoutException {
       debugPrint('SalesApiService timeout -> $path');
-      throw const SalesApiException('Tiempo de espera agotado con el servidor local');
+      throw const SalesApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('SalesApiService socket exception -> $path');
-      throw const SalesApiException('No se pudo conectar con el servidor local');
+      throw const SalesApiException('No se pudo conectar con el backend VPS');
     } on FormatException {
       debugPrint('SalesApiService invalid json -> $path');
-      throw const SalesApiException('Respuesta invalida del servidor local');
+      throw const SalesApiException('Respuesta invalida del backend VPS');
     }
   }
 
@@ -111,13 +113,13 @@ class SalesApiService {
       return parsed.whereType<Map<String, dynamic>>().toList();
     } on TimeoutException {
       debugPrint('SalesApiService timeout -> $path');
-      throw const SalesApiException('Tiempo de espera agotado con el servidor local');
+      throw const SalesApiException('Tiempo de espera agotado con el backend VPS');
     } on SocketException {
       debugPrint('SalesApiService socket exception -> $path');
-      throw const SalesApiException('No se pudo conectar con el servidor local');
+      throw const SalesApiException('No se pudo conectar con el backend VPS');
     } on FormatException {
       debugPrint('SalesApiService invalid json -> $path');
-      throw const SalesApiException('Respuesta invalida del servidor local');
+      throw const SalesApiException('Respuesta invalida del backend VPS');
     }
   }
 }

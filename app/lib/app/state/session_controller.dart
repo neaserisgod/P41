@@ -144,7 +144,7 @@ class SessionController extends ChangeNotifier {
   }
   SessionUser? get activeUser => _activeUser;
   SessionBranch? get activeBranch => _activeBranch;
-  String? get accountName => _account?.accountName ?? 'Servidor local';
+  String? get accountName => _account?.accountName ?? 'HorsePOS';
   String? get sessionError => _sessionError;
   bool get canSetupServer => _setupRequired;
   String? get accessToken => _accessToken;

@@ -8,19 +8,21 @@ import 'package:path/path.dart' as p;
 
 import 'p41_update_manifest.dart';
 
+const _apiBaseUrl = String.fromEnvironment(
+  'P41_API_BASE_URL',
+  defaultValue: 'http://31.97.166.250',
+);
 const _updatesUrl = String.fromEnvironment(
   'P41_UPDATES_URL',
-  defaultValue: 'https://api.horsepos.com/static/updates/p41/version.json',
+  defaultValue: '$_apiBaseUrl/static/updates/p41/version.json',
 );
 const _fallbackCatalogUrl = String.fromEnvironment(
   'P41_CATALOG_URL',
-  defaultValue:
-      'https://api.horsepos.com/static/bootstrap/p41/global_lookup.sqlite',
+  defaultValue: '$_apiBaseUrl/static/bootstrap/p41/global_lookup.sqlite',
 );
 const _fallbackImagesUrl = String.fromEnvironment(
   'P41_IMAGES_URL',
-  defaultValue:
-      'https://api.horsepos.com/static/bootstrap/p41/imagenes_productos.zip',
+  defaultValue: '$_apiBaseUrl/static/bootstrap/p41/imagenes_productos.zip',
 );
 const _fallbackCatalogVersion = String.fromEnvironment(
   'P41_CATALOG_VERSION',

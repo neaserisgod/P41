@@ -268,6 +268,28 @@ void main() {
     expect(controller.activeUser?.id, 'user-1');
     expect(controller.rememberedAccounts.length, 1);
   });
+
+  test('sign out returns to login and keeps remembered account', () async {
+    final controller = SessionController(
+      persistenceService: _FakeSessionPersistenceService(
+        const PersistedSession(
+          email: 'laplazoleta25@gmail.com',
+          branchId: 'branch-1',
+          userId: 'user-1',
+        ),
+      ),
+      localStoreService: _FakeLocalStoreService(),
+      remoteAuthService: _FakeRemoteAuthService(),
+    );
+    addTearDown(controller.dispose);
+
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    controller.signOut();
+
+    expect(controller.stage, SessionStage.login);
+    expect(controller.rememberedAccounts.length, 1);
+    expect(controller.rememberedAccounts.first.email, 'laplazoleta25@gmail.com');
+  });
 }
 
 class _FakeLocalStoreService extends LocalStoreService {

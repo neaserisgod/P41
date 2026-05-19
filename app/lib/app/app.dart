@@ -494,6 +494,7 @@ class _OperationalShellState extends State<OperationalShell> {
                           activeUser: activeUser,
                           availableUsers: widget.sessionController.users,
                           onUserSelected: _handleUserSelection,
+                          onSignOut: widget.sessionController.signOut,
                           activeBranch: activeBranch,
                           availableBranches: widget.sessionController.branches,
                           showBranchSwitcher: !widget.sessionController.hasSingleBranch,
@@ -656,6 +657,7 @@ class _OperationalShellState extends State<OperationalShell> {
           onOpenUsers: () => _tabManager.openWorkspace(WorkspaceKind.users),
           onOpenBranches: () => _tabManager.openWorkspace(WorkspaceKind.branches),
           onRestoreBackup: widget.onRequestAppReload,
+          onSignOut: widget.sessionController.signOut,
         );
     }
   }

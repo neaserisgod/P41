@@ -24,6 +24,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onOpenUsers,
     required this.onOpenBranches,
     required this.onRestoreBackup,
+    required this.onSignOut,
   });
 
   final SessionController sessionController;
@@ -31,6 +32,7 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback onOpenUsers;
   final VoidCallback onOpenBranches;
   final VoidCallback onRestoreBackup;
+  final VoidCallback onSignOut;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -91,6 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onOpenUsers: widget.onOpenUsers,
                           onOpenBranches: widget.onOpenBranches,
                           onRestoreBackup: widget.onRestoreBackup,
+                          onSignOut: widget.onSignOut,
                         ),
                       ),
                     ],
@@ -192,6 +195,7 @@ class _SettingsPanel extends StatelessWidget {
     required this.onOpenUsers,
     required this.onOpenBranches,
     required this.onRestoreBackup,
+    required this.onSignOut,
   });
 
   final SettingsSection section;
@@ -200,6 +204,7 @@ class _SettingsPanel extends StatelessWidget {
   final VoidCallback onOpenUsers;
   final VoidCallback onOpenBranches;
   final VoidCallback onRestoreBackup;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -222,6 +227,7 @@ class _SettingsPanel extends StatelessWidget {
         return _SystemSettingsPanel(
           sessionController: sessionController,
           onRestoreBackup: onRestoreBackup,
+          onSignOut: onSignOut,
         );
     }
   }
@@ -547,10 +553,12 @@ class _SystemSettingsPanel extends StatelessWidget {
   const _SystemSettingsPanel({
     required this.sessionController,
     required this.onRestoreBackup,
+    required this.onSignOut,
   });
 
   final SessionController sessionController;
   final VoidCallback onRestoreBackup;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -560,6 +568,7 @@ class _SystemSettingsPanel extends StatelessWidget {
       child: _SystemPanelBody(
         sessionController: sessionController,
         onRestoreBackup: onRestoreBackup,
+        onSignOut: onSignOut,
       ),
     );
   }
@@ -569,10 +578,12 @@ class _SystemPanelBody extends StatefulWidget {
   const _SystemPanelBody({
     required this.sessionController,
     required this.onRestoreBackup,
+    required this.onSignOut,
   });
 
   final SessionController sessionController;
   final VoidCallback onRestoreBackup;
+  final VoidCallback onSignOut;
 
   @override
   State<_SystemPanelBody> createState() => _SystemPanelBodyState();
@@ -673,6 +684,15 @@ class _SystemPanelBodyState extends State<_SystemPanelBody> {
         _ValueRow(label: 'Email', value: widget.sessionController.account?.ownerEmail ?? '-'),
         _ValueRow(label: 'Usuarios', value: '${widget.sessionController.allUsers.length}'),
         _ValueRow(label: 'Locales', value: '${widget.sessionController.allBranches.length}'),
+        const SizedBox(height: 18),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: widget.onSignOut,
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('Cerrar sesión'),
+          ),
+        ),
         const SizedBox(height: 18),
         const Divider(),
         const SizedBox(height: 18),

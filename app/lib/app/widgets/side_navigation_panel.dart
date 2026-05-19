@@ -14,6 +14,7 @@ class SideNavigationPanel extends StatelessWidget {
     required this.activeUser,
     required this.availableUsers,
     required this.onUserSelected,
+    required this.onSignOut,
     required this.activeBranch,
     required this.availableBranches,
     required this.showBranchSwitcher,
@@ -27,6 +28,7 @@ class SideNavigationPanel extends StatelessWidget {
   final SessionUser activeUser;
   final List<SessionUser> availableUsers;
   final ValueChanged<SessionUser> onUserSelected;
+  final VoidCallback onSignOut;
   final SessionBranch activeBranch;
   final List<SessionBranch> availableBranches;
   final bool showBranchSwitcher;
@@ -68,6 +70,7 @@ class SideNavigationPanel extends StatelessWidget {
                       activeUser: activeUser,
                       availableUsers: availableUsers,
                       onUserSelected: onUserSelected,
+                      onSignOut: onSignOut,
                     ),
                     if (showBranchSwitcher) ...[
                       SizedBox(height: compact ? 8 : 10),
@@ -131,11 +134,13 @@ class _AccountBlock extends StatelessWidget {
     required this.activeUser,
     required this.availableUsers,
     required this.onUserSelected,
+    required this.onSignOut,
   });
 
   final SessionUser activeUser;
   final List<SessionUser> availableUsers;
   final ValueChanged<SessionUser> onUserSelected;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +225,36 @@ class _AccountBlock extends StatelessWidget {
                       color: palette.warning,
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              InkWell(
+                onTap: onSignOut,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.logout_rounded,
+                        size: 14,
+                        color: palette.danger,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Cerrar sesión',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: palette.danger,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

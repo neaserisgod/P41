@@ -35,7 +35,6 @@ class PosProductGrid extends StatelessWidget {
             ? 0.78
             : 0.82;
         return GridView.builder(
-          cacheExtent: 640,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: 10,

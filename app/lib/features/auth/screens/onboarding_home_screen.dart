@@ -36,6 +36,27 @@ class OnboardingHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final readyToSell = hasTeam && productCount > 0 && hasOpenShift;
+    final completedSteps = [
+      branchName.trim().isNotEmpty,
+      hasTeam,
+      productCount > 0,
+      hasOpenShift,
+    ].where((item) => item).length;
+    final pendingSteps = 4 - completedSteps;
+    final nextActionLabel = !hasTeam
+        ? 'Crear equipo'
+        : productCount <= 0
+        ? 'Cargar productos'
+        : !hasOpenShift
+        ? 'Abrir caja'
+        : 'Ir a vender';
+    final nextAction = !hasTeam
+        ? onOpenTeam
+        : productCount <= 0
+        ? onOpenProducts
+        : !hasOpenShift
+        ? onOpenCash
+        : onOpenPos;
 
     return Container(
       color: palette.surface,
@@ -125,8 +146,25 @@ class OnboardingHomeScreen extends StatelessWidget {
                             label: 'Caja',
                             value: hasOpenShift ? 'Abierta' : 'Cerrada',
                           ),
+                          _StatChip(
+                            label: 'Progreso',
+                            value: '$completedSteps/4',
+                          ),
                         ],
                       ),
+                      if (!readyToSell) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          pendingSteps == 1
+                              ? 'Te falta 1 paso para poder vender.'
+                              : 'Te faltan $pendingSteps pasos para poder vender.',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: palette.warning,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -138,19 +176,27 @@ class OnboardingHomeScreen extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: readyToSell ? onOpenPos : null,
+                          onPressed: nextAction,
                           style: FilledButton.styleFrom(
-                            backgroundColor: palette.warning,
-                            foregroundColor: palette.textStrong,
+                            backgroundColor: readyToSell
+                                ? palette.warning
+                                : palette.accent,
+                            foregroundColor: readyToSell
+                                ? palette.textStrong
+                                : Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          icon: const Icon(Icons.point_of_sale_rounded),
-                          label: const Text(
-                            'Ir a vender',
-                            style: TextStyle(fontWeight: FontWeight.w800),
+                          icon: Icon(
+                            readyToSell
+                                ? Icons.point_of_sale_rounded
+                                : Icons.arrow_forward_rounded,
+                          ),
+                          label: Text(
+                            nextActionLabel,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
                       ),

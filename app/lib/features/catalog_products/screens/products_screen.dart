@@ -7,6 +7,7 @@ import '../../../app/models/catalog_product.dart';
 import '../../../app/models/global_catalog_product.dart';
 import '../../../app/models/inventory_space.dart';
 import '../../../app/models/product_pricing_rules.dart';
+import '../../../app/services/global_lookup_bootstrap_service.dart';
 import '../../../app/state/catalog_controller.dart';
 import '../../../app/widgets/desktop_viewport.dart';
 import '../../../app/widgets/product_image.dart';
@@ -43,12 +44,35 @@ class _ProductsScreenState extends State<ProductsScreen> {
     super.initState();
     _viewMode = widget.initialViewMode;
     _inventoryViewModel = InventoryViewModel();
+    widget.catalogController.addListener(_syncInventoryLocations);
+    _syncInventoryLocations();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProductsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.catalogController != widget.catalogController) {
+      oldWidget.catalogController.removeListener(_syncInventoryLocations);
+      widget.catalogController.addListener(_syncInventoryLocations);
+      _syncInventoryLocations();
+    }
   }
 
   @override
   void dispose() {
+    widget.catalogController.removeListener(_syncInventoryLocations);
     _inventoryViewModel.dispose();
     super.dispose();
+  }
+
+  void _syncInventoryLocations() {
+    final locations = _filteredLocations(
+      buildInventoryLocationsWithSpaces(
+        widget.catalogController.activeProducts,
+        widget.catalogController.inventorySpaces,
+      ),
+    );
+    _inventoryViewModel.updateLocations(locations);
   }
 
   @override
@@ -62,13 +86,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
         animation: widget.catalogController,
         builder: (context, _) {
           final products = _filteredProducts(widget.catalogController.products);
-          final locations = _filteredLocations(
-            buildInventoryLocationsWithSpaces(
-              widget.catalogController.activeProducts,
-              widget.catalogController.inventorySpaces,
-            ),
-          );
-          _inventoryViewModel.updateLocations(locations);
 
           return LayoutBuilder(
             builder: (context, constraints) {
@@ -86,9 +103,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       totalProducts: widget.catalogController.products.length,
                       totalLocations:
                           widget.catalogController.inventorySpaces.length,
-                      onQueryChanged: (value) => setState(() => _query = value),
-                      onViewModeChanged: (mode) =>
-                          setState(() => _viewMode = mode),
+                      onQueryChanged: (value) => setState(() {
+                        _query = value;
+                        _syncInventoryLocations();
+                      }),
+                      onViewModeChanged: (mode) => setState(() {
+                        _viewMode = mode;
+                        _syncInventoryLocations();
+                      }),
                       onCreate: () => _openEditor(),
                       onCreateSpace: _openLocationDialog,
                     ),
@@ -868,73 +890,190 @@ class _ProductRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           color: palette.surface,
         ),
-        child: Row(
-          children: [
-            _ProductThumbnail(product: product),
-            const SizedBox(width: 14),
-            Expanded(
-              flex: 34,
-              child: Column(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 920;
+            if (compact) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    product.name,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ProductThumbnail(product: product),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: palette.textStrong,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${product.sku} • ${product.category}',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: palette.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _ProductStatusChip(product: product),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _CompactMetaChip(
+                        label: 'Proveedor',
+                        value: product.supplierName,
+                      ),
+                      _CompactMetaChip(
+                        label: 'Lugar',
+                        value: '${product.locationType} ${product.locationName}',
+                      ),
+                      _CompactMetaChip(
+                        label: 'Stock',
+                        value: '${product.stock}',
+                      ),
+                      _CompactMetaChip(
+                        label: 'Precio',
+                        value: _money(product.price),
+                        emphasized: true,
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                _ProductThumbnail(product: product),
+                const SizedBox(width: 14),
+                Expanded(
+                  flex: 34,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: palette.textStrong,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${product.sku} • ${product.category}',
+                        style: TextStyle(fontSize: 11.5, color: palette.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 22,
+                  child: Text(
+                    product.supplierName,
+                    style: TextStyle(fontSize: 12, color: palette.textStrong),
+                  ),
+                ),
+                Expanded(
+                  flex: 20,
+                  child: Text(
+                    '${product.locationType} ${product.locationName}',
+                    style: TextStyle(fontSize: 12, color: palette.textStrong),
+                  ),
+                ),
+                Expanded(
+                  flex: 10,
+                  child: Text(
+                    '${product.stock}',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: palette.textStrong,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 14,
+                  child: Text(
+                    _money(product.price),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                       color: palette.textStrong,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${product.sku} • ${product.category}',
-                    style: TextStyle(fontSize: 11.5, color: palette.textMuted),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 22,
-              child: Text(
-                product.supplierName,
-                style: TextStyle(fontSize: 12, color: palette.textStrong),
-              ),
-            ),
-            Expanded(
-              flex: 20,
-              child: Text(
-                '${product.locationType} ${product.locationName}',
-                style: TextStyle(fontSize: 12, color: palette.textStrong),
-              ),
-            ),
-            Expanded(
-              flex: 10,
-              child: Text(
-                '${product.stock}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: palette.textStrong,
                 ),
-              ),
-            ),
-            Expanded(
-              flex: 14,
-              child: Text(
-                _money(product.price),
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  color: palette.textStrong,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            _ProductStatusChip(product: product),
-          ],
+                const SizedBox(width: 12),
+                _ProductStatusChip(product: product),
+              ],
+            );
+          },
         ),
+      ),
+    );
+  }
+}
+
+class _CompactMetaChip extends StatelessWidget {
+  const _CompactMetaChip({
+    required this.label,
+    required this.value,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: palette.surfaceMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: palette.textMuted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: emphasized ? 12.5 : 11.5,
+              fontWeight: emphasized ? FontWeight.w800 : FontWeight.w700,
+              color: palette.textStrong,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1076,7 +1215,11 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
   ];
   static const _customCategoryValue = '__custom_category__';
   static const _customLocationValue = '__custom_location__';
+  static const _globalLookupUnavailableMessage =
+      'Faltan los recursos locales del catálogo global.';
 
+  final GlobalLookupBootstrapService _globalLookupBootstrapService =
+      GlobalLookupBootstrapService();
   late final TextEditingController _globalSearchController;
   late final TextEditingController _nameController;
   late final TextEditingController _skuController;
@@ -1102,6 +1245,9 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
   Timer? _globalSearchDebounce;
   bool _isSearchingGlobal = false;
   String? _globalLookupError;
+  bool _hasPromptedGlobalLookupDownload = false;
+  bool _declinedGlobalLookupDownload = false;
+  bool _showAdvancedOptions = false;
   bool _isUpdatingPricing = false;
   _PricingField? _expandedPricingField = _PricingField.markup;
 
@@ -1150,6 +1296,8 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
     _imageUrlValue = product?.imageUrl ?? '';
     _bonusEnabled = pricing.bonusEnabled;
     _vatEnabled = pricing.vatEnabled;
+    _showAdvancedOptions =
+        product?.expirationDate != null || _bonusEnabled || _vatEnabled;
     final category = product?.category.trim();
     if (category != null &&
         category.isNotEmpty &&
@@ -1178,6 +1326,9 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
         (_) => _recalculateFromCost(),
       );
     }
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _promptForGlobalLookupResourcesIfNeeded(),
+    );
   }
 
   @override
@@ -1386,28 +1537,6 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      _PricingRulesCard(
-                        markupController: _markupController,
-                        bonusController: _bonusController,
-                        vatController: _vatController,
-                        bonusEnabled: _bonusEnabled,
-                        vatEnabled: _vatEnabled,
-                        expandedField: _expandedPricingField,
-                        onExpandField: (field) => setState(() {
-                          _expandedPricingField = _expandedPricingField == field
-                              ? null
-                              : field;
-                        }),
-                        onBonusEnabledChanged: (value) {
-                          setState(() => _bonusEnabled = value);
-                          _recalculateFromCost();
-                        },
-                        onVatEnabledChanged: (value) {
-                          setState(() => _vatEnabled = value);
-                          _recalculateFromCost();
-                        },
-                      ),
-                      const SizedBox(height: 12),
                       Row(
                         children: [
                           Expanded(
@@ -1445,17 +1574,48 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
                               keyboardType: TextInputType.number,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _DateField(
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _AdvancedProductOptionsCard(
+                        isExpanded: _showAdvancedOptions,
+                        onToggle: () => setState(() {
+                          _showAdvancedOptions = !_showAdvancedOptions;
+                        }),
+                        child: Column(
+                          children: [
+                            _PricingRulesCard(
+                              markupController: _markupController,
+                              bonusController: _bonusController,
+                              vatController: _vatController,
+                              bonusEnabled: _bonusEnabled,
+                              vatEnabled: _vatEnabled,
+                              expandedField: _expandedPricingField,
+                              onExpandField: (field) => setState(() {
+                                _expandedPricingField =
+                                    _expandedPricingField == field
+                                    ? null
+                                    : field;
+                              }),
+                              onBonusEnabledChanged: (value) {
+                                setState(() => _bonusEnabled = value);
+                                _recalculateFromCost();
+                              },
+                              onVatEnabledChanged: (value) {
+                                setState(() => _vatEnabled = value);
+                                _recalculateFromCost();
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            _DateField(
                               label: 'Vencimiento',
                               value: _expirationDate,
                               onPick: _pickDate,
                               onClear: () =>
                                   setState(() => _expirationDate = null),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1504,6 +1664,10 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
       return;
     }
     _globalSearchDebounce = Timer(const Duration(milliseconds: 350), () async {
+      final resourcesReady = await _promptForGlobalLookupResourcesIfNeeded();
+      if (!resourcesReady || !mounted) {
+        return;
+      }
       setState(() => _isSearchingGlobal = true);
       try {
         final results = await widget.catalogController.searchGlobalProducts(
@@ -1534,6 +1698,12 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
     if (barcode.length < 3) {
       return;
     }
+    final resourcesReady = await _promptForGlobalLookupResourcesIfNeeded(
+      forcePrompt: true,
+    );
+    if (!resourcesReady || !mounted) {
+      return;
+    }
     setState(() {
       _isSearchingGlobal = true;
       _globalLookupError = null;
@@ -1561,6 +1731,91 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
         _isSearchingGlobal = false;
         _globalLookupError = 'No se pudo consultar el catálogo global.';
       });
+    }
+  }
+
+  Future<bool> _promptForGlobalLookupResourcesIfNeeded({
+    bool forcePrompt = false,
+  }) async {
+    if (await _globalLookupBootstrapService.hasRequiredResources()) {
+      if (!mounted) {
+        return true;
+      }
+      setState(() {
+        if (_globalLookupError == _globalLookupUnavailableMessage) {
+          _globalLookupError = null;
+        }
+      });
+      return true;
+    }
+    if (!mounted) {
+      return false;
+    }
+    if (!forcePrompt &&
+        (_hasPromptedGlobalLookupDownload || _declinedGlobalLookupDownload)) {
+      setState(() => _globalLookupError = _globalLookupUnavailableMessage);
+      return false;
+    }
+
+    _hasPromptedGlobalLookupDownload = true;
+    final shouldDownload = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _GlobalLookupBootstrapDialog(),
+    );
+    if (shouldDownload != true) {
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _declinedGlobalLookupDownload = true;
+        _isSearchingGlobal = false;
+        _globalSuggestions = const [];
+        _globalLookupError = _globalLookupUnavailableMessage;
+      });
+      return false;
+    }
+
+    if (!mounted) {
+      return false;
+    }
+    setState(() {
+      _declinedGlobalLookupDownload = false;
+      _isSearchingGlobal = true;
+      _globalSuggestions = const [];
+      _globalLookupError = 'Preparando descarga del catálogo global...';
+    });
+    try {
+      await _globalLookupBootstrapService.downloadRequiredResources(
+        onStatus: (message, progress) {
+          if (!mounted) {
+            return;
+          }
+          final suffix = progress == null
+              ? ''
+              : ' ${((progress * 100).clamp(0, 100)).toStringAsFixed(0)}%';
+          setState(() {
+            _globalLookupError = '$message$suffix';
+          });
+        },
+      );
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _isSearchingGlobal = false;
+        _globalLookupError = 'Catálogo global listo.';
+      });
+      return true;
+    } catch (_) {
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _isSearchingGlobal = false;
+        _globalLookupError =
+            'No se pudieron descargar los recursos del catálogo global.';
+      });
+      return false;
     }
   }
 
@@ -1776,6 +2031,116 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
       }
     }
     return '';
+  }
+}
+
+class _GlobalLookupBootstrapDialog extends StatelessWidget {
+  const _GlobalLookupBootstrapDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: const Text('Descargar catálogo global'),
+      content: const Text(
+        'Faltan el catálogo y las imágenes globales en este equipo. ¿Querés descargarlos ahora para completar productos automáticamente?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Ahora no'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Descargar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdvancedProductOptionsCard extends StatelessWidget {
+  const _AdvancedProductOptionsCard({
+    required this.isExpanded,
+    required this.onToggle,
+    required this.child,
+  });
+
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.surfaceMuted,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Opciones avanzadas',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            color: palette.textStrong,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Precio fino, impuestos y vencimiento.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: palette.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    isExpanded ? 'Ocultar' : 'Mostrar',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: palette.textMuted,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: palette.textMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: child,
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2040,7 +2405,7 @@ class _PricingRulesCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'El precio final se calcula desde costo, margen, bonificación e IVA. Si cambiás el precio final, recalcula el costo.',
+            'Usalo sólo si necesitás ajustar margen, bonificación o IVA.',
             style: TextStyle(fontSize: 12, color: palette.textMuted),
           ),
           const SizedBox(height: 12),

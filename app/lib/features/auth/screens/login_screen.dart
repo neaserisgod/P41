@@ -9,14 +9,17 @@ class LoginScreen extends StatefulWidget {
     super.key,
     required this.accountName,
     required this.rememberedAccounts,
+    required this.onCreateAccount,
     required this.onLoadLocalUsers,
     required this.onLocalPinLogin,
     required this.onLogin,
     this.errorMessage,
+    this.noticeMessage,
   });
 
   final String accountName;
   final List<RememberedAccount> rememberedAccounts;
+  final VoidCallback onCreateAccount;
   final Future<List<LocalAccessUser>> Function(String email) onLoadLocalUsers;
   final Future<bool> Function({
     required String email,
@@ -28,6 +31,7 @@ class LoginScreen extends StatefulWidget {
     required String password,
   }) onLogin;
   final String? errorMessage;
+  final String? noticeMessage;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -200,6 +204,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ],
+          if (widget.noticeMessage != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.noticeMessage!,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: palette.success,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
@@ -244,6 +262,16 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          if (widget.rememberedAccounts.isEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _isSubmitting ? null : widget.onCreateAccount,
+                child: const Text('Crear cuenta nueva'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -313,8 +341,7 @@ class _RememberedAccountCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 3),
-                Expanded(
-                  child: Text(
+                Text(
                   account.email,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -324,8 +351,7 @@ class _RememberedAccountCard extends StatelessWidget {
                     color: palette.textMuted,
                   ),
                 ),
-              ),
-            ],
+              ],
             ),
           ),
         ),

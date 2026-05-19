@@ -69,6 +69,17 @@ class CashManagementScreen extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (cashController.statusMessage != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        cashController.statusMessage!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: palette.success,
+                        ),
+                      ),
+                    ],
                     SizedBox(height: viewport.sectionGap),
                     Expanded(
                       child: stacked
@@ -398,11 +409,15 @@ class _RegisterSummaryCard extends StatelessWidget {
             ),
           if (shift.expectedAmount != null)
             _InfoRow(
-              label: 'Esperado caja',
+              label: 'Esperado',
               value: _money(shift.expectedAmount!),
+              emphasize: true,
             ),
           if (shift.countedAmount != null)
-            _InfoRow(label: 'Contado', value: _money(shift.countedAmount!)),
+            _InfoRow(
+              label: 'Contado real',
+              value: _money(shift.countedAmount!),
+            ),
           if (shift.difference != null)
             _InfoRow(
               label: 'Diferencia',
@@ -486,8 +501,8 @@ class _CashHistoryPanel extends StatelessWidget {
                           SizedBox(
                             width: 100,
                             child: Text(
-                              shift.countedAmount != null
-                                  ? _money(shift.countedAmount!)
+                              shift.expectedAmount != null
+                                  ? _money(shift.expectedAmount!)
                                   : _money(shift.openingAmount ?? 0),
                               textAlign: TextAlign.right,
                               style: TextStyle(

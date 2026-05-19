@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app.dart';
+import '../../../app/widgets/desktop_viewport.dart';
 import '../models/provider_record.dart';
 
 class ProviderFormResult {
@@ -76,137 +77,174 @@ class _ProviderFormDialogState extends State<ProviderFormDialog> {
     final palette = context.palette;
     final isEditing = widget.initialRecord != null;
 
-    return AlertDialog(
+    return Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
-      contentPadding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
-      actionsPadding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
-      title: Text(isEditing ? 'Editar proveedor' : 'Agregar proveedor'),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildField(
-                controller: _nameController,
-                label: 'Nombre',
-                hint: 'Ej. Distribuidora Norte',
-              ),
-              const SizedBox(height: 12),
-              _buildField(
-                controller: _contactController,
-                label: 'Contacto',
-                hint: 'Ej. Juan Pérez',
-              ),
-              const SizedBox(height: 12),
-              Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = constraints.viewport;
+          final compact = constraints.maxWidth < 620;
+          return ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: _buildField(
-                      controller: _phoneController,
-                      label: 'Teléfono',
-                      hint: 'Ej. 387xxxxxxx',
+                  Text(
+                    isEditing ? 'Editar proveedor' : 'Agregar proveedor',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: palette.textStrong,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildField(
-                      controller: _emailController,
-                      label: 'Email',
-                      hint: 'Ej. ventas@proveedor.com',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildField(
-                      controller: _categoryController,
-                      label: 'Categoría',
-                      hint: 'Ej. Bebidas',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      height: 56,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: palette.surfaceMuted,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: palette.border),
-                      ),
-                      child: Row(
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              _isActive ? 'Operativo' : 'Inactivo',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: palette.textStrong,
-                              ),
-                            ),
+                          _buildField(
+                            controller: _nameController,
+                            label: 'Nombre',
+                            hint: 'Ej. Distribuidora Norte',
                           ),
-                          Switch(
-                            value: _isActive,
-                            onChanged: (value) => setState(() => _isActive = value),
+                          const SizedBox(height: 12),
+                          _buildField(
+                            controller: _contactController,
+                            label: 'Contacto',
+                            hint: 'Ej. Juan Pérez',
+                          ),
+                          const SizedBox(height: 12),
+                          if (compact) ...[
+                            _buildField(
+                              controller: _phoneController,
+                              label: 'Teléfono',
+                              hint: 'Ej. 387xxxxxxx',
+                            ),
+                            const SizedBox(height: 12),
+                            _buildField(
+                              controller: _emailController,
+                              label: 'Email',
+                              hint: 'Ej. ventas@proveedor.com',
+                            ),
+                          ] else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildField(
+                                    controller: _phoneController,
+                                    label: 'Teléfono',
+                                    hint: 'Ej. 387xxxxxxx',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildField(
+                                    controller: _emailController,
+                                    label: 'Email',
+                                    hint: 'Ej. ventas@proveedor.com',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: 12),
+                          if (compact) ...[
+                            _buildField(
+                              controller: _categoryController,
+                              label: 'Categoría',
+                              hint: 'Ej. Bebidas',
+                            ),
+                            const SizedBox(height: 12),
+                            _ActiveField(
+                              isActive: _isActive,
+                              onChanged: (value) =>
+                                  setState(() => _isActive = value),
+                            ),
+                          ] else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildField(
+                                    controller: _categoryController,
+                                    label: 'Categoría',
+                                    hint: 'Ej. Bebidas',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _ActiveField(
+                                    isActive: _isActive,
+                                    onChanged: (value) =>
+                                        setState(() => _isActive = value),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: 18),
+                          _DaySelector(
+                            title: 'Días de pedido',
+                            selectedDays: _orderDays,
+                            onToggle: (day) =>
+                                setState(() => _toggleDay(_orderDays, day)),
+                          ),
+                          const SizedBox(height: 14),
+                          _DaySelector(
+                            title: 'Días de entrega',
+                            selectedDays: _deliveryDays,
+                            onToggle: (day) =>
+                                setState(() => _toggleDay(_deliveryDays, day)),
                           ),
                         ],
                       ),
                     ),
                   ),
+                  SizedBox(height: viewport.sectionGap),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancelar'),
+                      ),
+                      FilledButton(
+                        onPressed: () {
+                          final name = _nameController.text.trim();
+                          if (name.isEmpty) {
+                            return;
+                          }
+                          Navigator.of(context).pop(
+                            ProviderFormResult(
+                              name: name,
+                              contact: _contactController.text.trim(),
+                              phone: _phoneController.text.trim(),
+                              email: _emailController.text.trim(),
+                              category: _categoryController.text.trim().isEmpty
+                                  ? 'General'
+                                  : _categoryController.text.trim(),
+                              isActive: _isActive,
+                              orderDays: _orderDays.toList()..sort(),
+                              deliveryDays: _deliveryDays.toList()..sort(),
+                            ),
+                          );
+                        },
+                        child: Text(isEditing ? 'Guardar' : 'Crear'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-              const SizedBox(height: 18),
-              _DaySelector(
-                title: 'Días de pedido',
-                selectedDays: _orderDays,
-                onToggle: (day) => setState(() => _toggleDay(_orderDays, day)),
-              ),
-              const SizedBox(height: 14),
-              _DaySelector(
-                title: 'Días de entrega',
-                selectedDays: _deliveryDays,
-                onToggle: (day) => setState(() => _toggleDay(_deliveryDays, day)),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final name = _nameController.text.trim();
-            if (name.isEmpty) {
-              return;
-            }
-            Navigator.of(context).pop(
-              ProviderFormResult(
-                name: name,
-                contact: _contactController.text.trim(),
-                phone: _phoneController.text.trim(),
-                email: _emailController.text.trim(),
-                category: _categoryController.text.trim().isEmpty ? 'General' : _categoryController.text.trim(),
-                isActive: _isActive,
-                orderDays: _orderDays.toList()..sort(),
-                deliveryDays: _deliveryDays.toList()..sort(),
-              ),
-            );
-          },
-          child: Text(isEditing ? 'Guardar' : 'Crear'),
-        ),
-      ],
     );
   }
 
@@ -241,6 +279,48 @@ class _ProviderFormDialogState extends State<ProviderFormDialog> {
     } else {
       target.add(day);
     }
+  }
+}
+
+class _ActiveField extends StatelessWidget {
+  const _ActiveField({
+    required this.isActive,
+    required this.onChanged,
+  });
+
+  final bool isActive;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: palette.surfaceMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              isActive ? 'Operativo' : 'Inactivo',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: palette.textStrong,
+              ),
+            ),
+          ),
+          Switch(
+            value: isActive,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
   }
 }
 

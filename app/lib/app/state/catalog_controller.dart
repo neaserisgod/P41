@@ -7,7 +7,7 @@ import '../models/global_catalog_product.dart';
 import '../models/inventory_space.dart';
 import '../models/product_pricing_rules.dart';
 import '../models/session_context.dart';
-import '../services/catalog_api_service.dart';
+import '../services/global_lookup_local_service.dart';
 import '../services/local_store_service.dart';
 
 class CatalogController extends ChangeNotifier {
@@ -30,26 +30,23 @@ class CatalogController extends ChangeNotifier {
   ];
 
   CatalogController({
-    required String accessToken,
     required SessionBranch initialBranch,
     required String scopeKey,
-    CatalogApiService? apiService,
+    GlobalLookupLocalService? globalLookupLocalService,
     LocalStoreService? localStoreService,
-  })  : _accessToken = accessToken,
-        _activeBranch = initialBranch,
+  })  : _activeBranch = initialBranch,
         _scopeKey = scopeKey,
-        _apiService = apiService ?? CatalogApiService(),
+        _globalLookupLocalService =
+            globalLookupLocalService ?? const GlobalLookupLocalService(),
         _localStoreService = localStoreService ?? LocalStoreService() {
     unawaited(reload());
   }
 
-  final CatalogApiService _apiService;
+  final GlobalLookupLocalService _globalLookupLocalService;
   final LocalStoreService _localStoreService;
   final List<CatalogProduct> _products = [];
   final List<InventorySpace> _manualLocations = [];
-  final String _deviceId = 'p41-desktop';
   final Map<String, String> _supplierNamesById = {};
-  String _accessToken;
   SessionBranch _activeBranch;
   String _scopeKey;
   bool _isLoading = false;
@@ -65,11 +62,11 @@ class CatalogController extends ChangeNotifier {
   ProductPricingRules get pricingDefaults => _pricingDefaults;
 
   Future<List<GlobalCatalogProduct>> searchGlobalProducts(String query) {
-    return _apiService.searchGlobalProducts(query);
+    return _globalLookupLocalService.search(query);
   }
 
   Future<GlobalCatalogProduct?> lookupGlobalProduct(String barcode) {
-    return _apiService.lookupGlobalProduct(barcode);
+    return _globalLookupLocalService.lookup(barcode);
   }
 
   Future<void> updatePricingDefaults(ProductPricingRules rules) async {
@@ -217,65 +214,21 @@ class CatalogController extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     await _restorePricingDefaults();
-    if (await _localStoreService.isOfflineOnly()) {
-      final restored = await _restoreLocalSnapshot();
-      _errorMessage = restored ? null : 'Todavía no hay productos guardados.';
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-    try {
-      final branchId = int.tryParse(_activeBranch.id);
-      final payload = await _apiService.pullCatalog(
-        token: _accessToken,
-        deviceId: _deviceId,
-        branchId: branchId,
-      );
-
-      _supplierNamesById
-        ..clear()
-        ..addEntries(
-          payload.suppliers.map(
-            (supplier) => MapEntry(
-              supplier['id']?.toString() ?? '',
-              supplier['name']?.toString() ?? '',
-            ),
-          ).where((entry) => entry.key.isNotEmpty && entry.value.isNotEmpty),
-        );
-
-      if (payload.products.isEmpty) {
-        final restored = await _restoreLocalSnapshot();
-        _errorMessage = restored ? null : 'Todavía no hay productos guardados.';
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-
-      _products
-        ..clear()
-        ..addAll(payload.products.map(_productFromApi));
-      await _saveLocalSnapshot();
-    } on CatalogApiException catch (error) {
-      final restored = await _restoreLocalSnapshot();
-      _errorMessage = restored ? null : error.message;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    final restored = await _restoreLocalSnapshot();
+    _errorMessage = restored ? null : 'Todavía no hay productos guardados.';
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> updateSession({
-    required String accessToken,
     required SessionBranch activeBranch,
     required String scopeKey,
   }) async {
-    final tokenChanged = _accessToken != accessToken;
     final branchChanged = _activeBranch.id != activeBranch.id;
     final scopeChanged = _scopeKey != scopeKey;
-    _accessToken = accessToken;
     _activeBranch = activeBranch;
     _scopeKey = scopeKey;
-    if (tokenChanged || branchChanged || scopeChanged) {
+    if (branchChanged || scopeChanged) {
       await reload();
     }
   }
@@ -303,109 +256,35 @@ class CatalogController extends ChangeNotifier {
       name: normalizedLocationName,
       type: normalizedLocationType,
     );
-    if (await _localStoreService.isOfflineOnly()) {
-      final supplierId = _stableSupplierId(supplierName);
-      final localProduct = CatalogProduct(
-        id: 'local-product-${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        sku: sku.trim().isEmpty ? _skuFromName(name) : sku.trim(),
-        barcode: barcode.trim(),
-        category: category.trim().isEmpty ? 'General' : category.trim(),
-        supplierId: supplierId,
-        supplierName: supplierName,
-        locationId: resolvedSpace?.id ?? _locationIdFromName(normalizedLocationName, normalizedLocationType),
-        locationName: normalizedLocationName,
-        locationType: normalizedLocationType,
-        price: price,
-        cost: cost,
-        stock: stock,
-        minStock: minStock,
-        pricingRules: pricingRules,
-        expirationDate: expirationDate,
-        imageUrl: imageUrl.trim(),
-        isActive: isActive,
-      );
-      if (supplierName.trim().isNotEmpty) {
-        _supplierNamesById[supplierId] = supplierName.trim();
-      }
-      _products.add(localProduct);
-      await _saveLocalSnapshot();
-      _errorMessage = 'Producto guardado.';
-      notifyListeners();
-      return;
+    final supplierId = _stableSupplierId(supplierName);
+    final localProduct = CatalogProduct(
+      id: 'local-product-${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      sku: sku.trim().isEmpty ? _skuFromName(name) : sku.trim(),
+      barcode: barcode.trim(),
+      category: category.trim().isEmpty ? 'General' : category.trim(),
+      supplierId: supplierId,
+      supplierName: supplierName,
+      locationId: resolvedSpace?.id ??
+          _locationIdFromName(normalizedLocationName, normalizedLocationType),
+      locationName: normalizedLocationName,
+      locationType: normalizedLocationType,
+      price: price,
+      cost: cost,
+      stock: stock,
+      minStock: minStock,
+      pricingRules: pricingRules,
+      expirationDate: expirationDate,
+      imageUrl: imageUrl.trim(),
+      isActive: isActive,
+    );
+    if (supplierName.trim().isNotEmpty) {
+      _supplierNamesById[supplierId] = supplierName.trim();
     }
-    try {
-      final supplierId = _supplierIdForName(supplierName);
-      final response = await _apiService.createProduct(
-        token: _accessToken,
-        body: {
-          'sku': sku.trim().isEmpty ? _skuFromName(name) : sku.trim(),
-          'name': name,
-          'category': category.trim().isEmpty ? 'General' : category.trim(),
-          'price': price,
-          'cost': cost,
-          'stock': stock,
-          'min_stock': minStock,
-          'is_active': isActive,
-          'supplier_id': supplierId,
-          'branch_id': int.tryParse(_activeBranch.id),
-          'description': _encodeProductMeta(
-            locationName: normalizedLocationName,
-            locationType: normalizedLocationType,
-            expirationDate: expirationDate,
-            barcode: barcode,
-            imageUrl: imageUrl,
-            pricingRules: pricingRules,
-          ),
-        },
-      );
-      _products.add(
-        _productFromApi(response).copyWith(
-          barcode: barcode.trim(),
-          locationId: resolvedSpace?.id ?? _locationIdFromName(normalizedLocationName, normalizedLocationType),
-          locationName: normalizedLocationName,
-          locationType: normalizedLocationType,
-          supplierName: supplierName,
-          minStock: minStock,
-          pricingRules: pricingRules,
-          expirationDate: expirationDate,
-          imageUrl: imageUrl.trim(),
-        ),
-      );
-      await _saveLocalSnapshot();
-      notifyListeners();
-    } on CatalogApiException catch (error) {
-      final supplierId = _stableSupplierId(supplierName);
-      final localProduct = CatalogProduct(
-        id: 'local-product-${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        sku: sku.trim().isEmpty ? _skuFromName(name) : sku.trim(),
-        barcode: barcode.trim(),
-        category: category.trim().isEmpty ? 'General' : category.trim(),
-        supplierId: supplierId,
-        supplierName: supplierName,
-        locationId: resolvedSpace?.id ?? _locationIdFromName(normalizedLocationName, normalizedLocationType),
-        locationName: normalizedLocationName,
-        locationType: normalizedLocationType,
-        price: price,
-        cost: cost,
-        stock: stock,
-        minStock: minStock,
-        pricingRules: pricingRules,
-        expirationDate: expirationDate,
-        imageUrl: imageUrl.trim(),
-        isActive: isActive,
-      );
-      if (supplierName.trim().isNotEmpty) {
-        _supplierNamesById[supplierId] = supplierName.trim();
-      }
-      _products.add(localProduct);
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Producto guardado.'
-          : error.message;
-      notifyListeners();
-    }
+    _products.add(localProduct);
+    await _saveLocalSnapshot();
+    _errorMessage = 'Producto guardado.';
+    notifyListeners();
   }
 
   Future<void> updateProduct(CatalogProduct product) async {
@@ -424,58 +303,9 @@ class CatalogController extends ChangeNotifier {
       locationId: normalizedSpace?.id ?? _locationIdFromName(product.locationName, product.locationType),
     );
     _products[index] = normalizedProduct;
+    await _saveLocalSnapshot();
+    _errorMessage = 'Producto actualizado.';
     notifyListeners();
-    if (await _localStoreService.isOfflineOnly()) {
-      await _saveLocalSnapshot();
-      _errorMessage = 'Producto actualizado.';
-      notifyListeners();
-      return;
-    }
-    try {
-      final response = await _apiService.updateProduct(
-        token: _accessToken,
-        productId: product.id,
-        body: {
-          'sku': normalizedProduct.sku,
-          'name': normalizedProduct.name,
-          'category': normalizedProduct.category,
-          'price': normalizedProduct.price,
-          'cost': normalizedProduct.cost,
-          'stock': normalizedProduct.stock,
-          'min_stock': normalizedProduct.minStock,
-          'is_active': normalizedProduct.isActive,
-          'supplier_id': _supplierIdForName(normalizedProduct.supplierName),
-          'description': _encodeProductMeta(
-            locationName: normalizedProduct.locationName,
-            locationType: normalizedProduct.locationType,
-            expirationDate: normalizedProduct.expirationDate,
-            barcode: normalizedProduct.barcode,
-            imageUrl: normalizedProduct.imageUrl,
-            pricingRules: normalizedProduct.pricingRules,
-          ),
-        },
-      );
-      _products[index] = _productFromApi(response).copyWith(
-        barcode: normalizedProduct.barcode,
-        locationId: normalizedProduct.locationId,
-        locationName: normalizedProduct.locationName,
-        locationType: normalizedProduct.locationType,
-        supplierName: normalizedProduct.supplierName,
-        minStock: normalizedProduct.minStock,
-        pricingRules: normalizedProduct.pricingRules,
-        expirationDate: normalizedProduct.expirationDate,
-        imageUrl: normalizedProduct.imageUrl,
-      );
-      await _saveLocalSnapshot();
-      notifyListeners();
-    } on CatalogApiException catch (error) {
-      _products[index] = normalizedProduct;
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Producto actualizado.'
-          : error.message;
-      notifyListeners();
-    }
   }
 
   Future<void> applyTransactionStockReduction({
@@ -527,34 +357,6 @@ class CatalogController extends ChangeNotifier {
     }
     await _saveLocalSnapshot();
     notifyListeners();
-  }
-
-  CatalogProduct _productFromApi(Map<String, dynamic> json) {
-    final supplierId = json['supplier_id']?.toString() ?? '';
-    final description = json['description']?.toString() ?? '';
-    final meta = _metaFromDescription(description);
-    return CatalogProduct(
-      id: json['id'].toString(),
-      name: json['name']?.toString() ?? 'Producto',
-      sku: json['sku']?.toString() ?? '',
-      barcode: meta.barcode,
-      category: (json['category']?.toString().trim().isNotEmpty ?? false)
-          ? json['category'].toString()
-          : 'General',
-      supplierId: supplierId,
-      supplierName: _supplierNamesById[supplierId] ?? 'Sin proveedor',
-      locationId: _locationIdFromName(meta.locationName, meta.locationType),
-      locationName: meta.locationName,
-      locationType: meta.locationType,
-      price: (json['price'] as num?)?.toDouble() ?? 0,
-      cost: (json['cost'] as num?)?.toDouble() ?? 0,
-      stock: ((json['stock'] as num?)?.round() ?? 0),
-      minStock: ((json['min_stock'] as num?)?.round() ?? 0),
-      pricingRules: meta.pricingRules,
-      expirationDate: meta.expirationDate,
-      imageUrl: meta.imageUrl,
-      isActive: (json['is_active'] as bool?) ?? true,
-    );
   }
 
   String? _supplierIdForName(String supplierName) {
@@ -728,11 +530,6 @@ class CatalogController extends ChangeNotifier {
     );
   }
 
-  bool _isConnectivityError(CatalogApiException error) {
-    return error.statusCode == null &&
-        (error.message.contains('No se pudo conectar') || error.message.contains('Tiempo de espera'));
-  }
-
   String _locationIdFromName(String locationName, String locationType) {
     return buildLocationId(
       locationName: locationName,
@@ -751,111 +548,6 @@ class CatalogController extends ChangeNotifier {
     return normalized.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
   }
 
-  String _encodeProductMeta({
-    required String locationName,
-    required String locationType,
-    DateTime? expirationDate,
-    String? barcode,
-    String? imageUrl,
-    ProductPricingRules? pricingRules,
-  }) {
-    final lines = <String>[
-      'Lugar: ${locationName.trim()}',
-      'Tipo: ${locationType.trim()}',
-    ];
-    if (barcode?.trim().isNotEmpty ?? false) {
-      lines.add('Barcode: ${barcode!.trim()}');
-    }
-    if (imageUrl?.trim().isNotEmpty ?? false) {
-      lines.add('Imagen: ${imageUrl!.trim()}');
-    }
-    final resolvedPricing = pricingRules ?? _pricingDefaults;
-    lines.add('Markup: ${resolvedPricing.markupPercent}');
-    lines.add('Bonificacion: ${resolvedPricing.bonusPercent}');
-    lines.add('BonificacionActiva: ${resolvedPricing.bonusEnabled}');
-    lines.add('Iva: ${resolvedPricing.vatPercent}');
-    lines.add('IvaActivo: ${resolvedPricing.vatEnabled}');
-    if (expirationDate != null) {
-      lines.add('Vencimiento: ${expirationDate.toIso8601String().split('T').first}');
-    }
-    return lines.join('\n');
-  }
-
-  _ProductMeta _metaFromDescription(String description) {
-    final lines = description.split('\n');
-    String? locationName;
-    String? locationType;
-    String? barcode;
-    String? imageUrl;
-    double? markupPercent;
-    double? bonusPercent;
-    bool? bonusEnabled;
-    double? vatPercent;
-    bool? vatEnabled;
-    DateTime? expirationDate;
-
-    for (final rawLine in lines) {
-      final line = rawLine.trim();
-      if (line.startsWith('Lugar:')) {
-        locationName = line.substring('Lugar:'.length).trim();
-      } else if (line.startsWith('Tipo:')) {
-        locationType = line.substring('Tipo:'.length).trim();
-      } else if (line.startsWith('Barcode:')) {
-        barcode = line.substring('Barcode:'.length).trim();
-      } else if (line.startsWith('Imagen:')) {
-        imageUrl = line.substring('Imagen:'.length).trim();
-      } else if (line.startsWith('Markup:')) {
-        markupPercent = double.tryParse(line.substring('Markup:'.length).trim());
-      } else if (line.startsWith('Bonificacion:')) {
-        bonusPercent = double.tryParse(line.substring('Bonificacion:'.length).trim());
-      } else if (line.startsWith('BonificacionActiva:')) {
-        bonusEnabled = line.substring('BonificacionActiva:'.length).trim().toLowerCase() == 'true';
-      } else if (line.startsWith('Iva:')) {
-        vatPercent = double.tryParse(line.substring('Iva:'.length).trim());
-      } else if (line.startsWith('IvaActivo:')) {
-        vatEnabled = line.substring('IvaActivo:'.length).trim().toLowerCase() == 'true';
-      } else if (line.startsWith('Vencimiento:')) {
-        expirationDate = DateTime.tryParse(line.substring('Vencimiento:'.length).trim());
-      }
-    }
-
-    if ((locationName == null || locationType == null) && description.isNotEmpty) {
-      final legacy = _legacyLocationLabelFromDescription(description);
-      locationName ??= legacy.$1;
-      locationType ??= legacy.$2;
-    }
-
-    return _ProductMeta(
-      locationName: (locationName?.trim().isNotEmpty ?? false) ? locationName!.trim() : _activeBranch.name,
-      locationType: (locationType?.trim().isNotEmpty ?? false) ? locationType!.trim() : 'Mueble',
-      barcode: barcode?.trim() ?? '',
-      imageUrl: imageUrl?.trim() ?? '',
-      pricingRules: ProductPricingRules(
-        markupPercent: markupPercent ?? _pricingDefaults.markupPercent,
-        bonusPercent: bonusPercent ?? _pricingDefaults.bonusPercent,
-        bonusEnabled: bonusEnabled ?? _pricingDefaults.bonusEnabled,
-        vatPercent: vatPercent ?? _pricingDefaults.vatPercent,
-        vatEnabled: vatEnabled ?? _pricingDefaults.vatEnabled,
-      ),
-      expirationDate: expirationDate,
-    );
-  }
-
-  (String, String) _legacyLocationLabelFromDescription(String description) {
-    const prefix = 'Ubicacion: ';
-    if (description.startsWith(prefix) && description.endsWith(')')) {
-      final raw = description.substring(prefix.length);
-      final separator = raw.lastIndexOf(' (');
-      if (separator != -1) {
-        return (
-          raw.substring(0, separator).trim(),
-          raw.substring(separator + 2, raw.length - 1).trim(),
-        );
-      }
-    }
-    return (_activeBranch.name, 'Mueble');
-  }
-
   String _skuFromName(String name) {
     final base = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
     final suffix = DateTime.now().millisecondsSinceEpoch.toString().substring(8);
@@ -869,22 +561,4 @@ class CatalogController extends ChangeNotifier {
   String get _catalogSuppliersSection => 'catalog_suppliers_${_activeBranch.id}';
   String get _catalogLocationsSection => 'catalog_locations_${_activeBranch.id}';
   String get _pricingDefaultsSection => 'pricing_defaults';
-}
-
-class _ProductMeta {
-  const _ProductMeta({
-    required this.locationName,
-    required this.locationType,
-    required this.barcode,
-    required this.imageUrl,
-    required this.pricingRules,
-    required this.expirationDate,
-  });
-
-  final String locationName;
-  final String locationType;
-  final String barcode;
-  final String imageUrl;
-  final ProductPricingRules pricingRules;
-  final DateTime? expirationDate;
 }

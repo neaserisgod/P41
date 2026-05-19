@@ -109,7 +109,7 @@ class _LocationCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 location.providers.isEmpty
-                    ? 'Sin productos todavía.'
+                    ? 'Todavía no hay productos en esta ubicación.'
                     : location.providers.map((provider) => provider.name).join(' • '),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/local_store_service.dart';
+import '../services/remote_auth_service.dart';
 import '../services/session_persistence_service.dart';
-import '../services/session_api_service.dart';
 import '../models/session_context.dart';
 
 enum SessionStage { loading, setup, login, branchSelection, userSelection, ready }
@@ -85,36 +85,39 @@ class AccountProfile {
 
 class SessionController extends ChangeNotifier {
   SessionController({
-    SessionApiService? apiService,
     SessionPersistenceService? persistenceService,
     LocalStoreService? localStoreService,
-  })  : _apiService = apiService ?? SessionApiService(),
-        _persistenceService = persistenceService ?? SessionPersistenceService(),
-        _localStoreService = localStoreService ?? LocalStoreService() {
+    RemoteAuthService? remoteAuthService,
+  })  : _persistenceService = persistenceService ?? SessionPersistenceService(),
+        _localStoreService = localStoreService ?? LocalStoreService(),
+        _remoteAuthService = remoteAuthService ?? RemoteAuthService() {
     _bootstrap();
   }
 
-  final SessionApiService _apiService;
   final SessionPersistenceService _persistenceService;
   final LocalStoreService _localStoreService;
+  final RemoteAuthService _remoteAuthService;
   AccountProfile? _account;
   bool _isBootstrapping = true;
   bool _setupRequired = false;
+  bool _preferLoginWhenSetupRequired = false;
   bool _isAuthenticated = false;
   SessionUser? _activeUser;
   SessionBranch? _activeBranch;
   String? _sessionError;
+  String? _sessionNotice;
   String? _accessToken;
   String? _businessId;
   PersistedSession? _persistedSession;
   bool _offlineOnly = true;
   List<RememberedAccount> _rememberedAccounts = const [];
+  bool _shouldStartOnboarding = false;
 
   SessionStage get stage {
     if (_isBootstrapping) {
       return SessionStage.loading;
     }
-    if (_setupRequired) {
+    if (_setupRequired && !_preferLoginWhenSetupRequired) {
       return SessionStage.setup;
     }
     if (!_isAuthenticated) {
@@ -146,11 +149,13 @@ class SessionController extends ChangeNotifier {
   SessionBranch? get activeBranch => _activeBranch;
   String? get accountName => _account?.accountName ?? 'HorsePOS';
   String? get sessionError => _sessionError;
+  String? get sessionNotice => _sessionNotice;
   bool get canSetupServer => _setupRequired;
   String? get accessToken => _accessToken;
   String? get businessId => _businessId;
   bool get offlineOnly => _offlineOnly;
   List<RememberedAccount> get rememberedAccounts => _rememberedAccounts;
+  bool get shouldStartOnboarding => _shouldStartOnboarding;
 
   Future<List<LocalAccessUser>> localUsersForAccount(String email) async {
     final cached = await _localStoreService.readSessionSnapshot(email) ??
@@ -184,6 +189,7 @@ class SessionController extends ChangeNotifier {
     required String password,
   }) async {
     _sessionError = null;
+    _sessionNotice = null;
     notifyListeners();
     final normalizedAccountName = accountName.trim().isEmpty ? 'P41 Cuenta' : accountName.trim();
     final normalizedEmail = ownerEmail.trim();
@@ -198,26 +204,21 @@ class SessionController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    final displayName = normalizedAccountName.trim().isEmpty
+        ? normalizedEmail.split('@').first
+        : normalizedAccountName.trim();
     try {
-      if (_offlineOnly) {
-        await _createLocalAccount(
-          accountName: normalizedAccountName,
-          ownerEmail: normalizedEmail,
-          password: normalizedPassword,
-        );
-        return;
-      }
-      await _apiService.setupAdmin(
+      await _remoteAuthService.createInitialAdmin(
         businessName: normalizedAccountName,
         email: normalizedEmail,
         password: normalizedPassword,
+        displayName: displayName,
       );
-      _setupRequired = false;
-      await signIn(
-        email: normalizedEmail,
-        password: normalizedPassword,
-      );
-    } on SessionApiException catch (error) {
+      _preferLoginWhenSetupRequired = true;
+      _sessionNotice =
+          'Cuenta creada en el VPS. Ya podés iniciar sesión.';
+      notifyListeners();
+    } on RemoteAuthException catch (error) {
       _sessionError = error.message;
       notifyListeners();
     }
@@ -235,50 +236,104 @@ class SessionController extends ChangeNotifier {
     );
     if (!silent) {
       _sessionError = null;
+      _sessionNotice = null;
       notifyListeners();
     }
     try {
-      debugPrint('SessionController.signIn start -> $normalizedEmail');
-      final payload = await _apiService.login(
+      final remote = await _remoteAuthService.login(
         email: normalizedEmail,
         password: password,
       );
-      debugPrint('SessionController.signIn payload ok -> business=${payload.profile.businessName}');
-      _hydrateFromServer(payload, password: password);
-      debugPrint('SessionController.signIn hydrated -> users=${allUsers.length} branches=${allBranches.length}');
-      _persistedSession = PersistedSession(
-        email: normalizedEmail,
-        branchId: _activeBranch?.id,
-        userId: _activeUser?.id,
+      await _completeRemoteSignIn(
+        remote,
+        password: password,
+        shouldStartOnboarding: !hasRememberedAccount,
       );
-      await _persistenceService.save(_persistedSession!);
-      await _saveSessionSnapshot();
-      await _refreshRememberedAccounts();
-      _sessionError = null;
-      notifyListeners();
       return true;
-    } on SessionApiException catch (error) {
-      debugPrint('SessionController.signIn api error -> ${error.message}');
-      _sessionError = silent
-          ? null
-          : (_isConnectivityError(error)
-              ? (hasRememberedAccount
-                  ? 'Usá la cuenta guardada con PIN o conectate para validar la clave.'
-                  : 'Necesitás conexión para validar esta cuenta por primera vez.')
-              : error.message);
-      notifyListeners();
-      return false;
-    } catch (error, stackTrace) {
-      debugPrint('SessionController.signIn unexpected -> $error');
-      debugPrintStack(stackTrace: stackTrace);
-      _sessionError = silent
-          ? null
-          : (_offlineOnly && !hasRememberedAccount
-              ? 'No se pudo validar esta cuenta contra el servidor.'
-              : 'No se pudo completar el acceso con los datos del servidor');
+    } on RemoteAuthException catch (error) {
+      if (_isConnectivityError(error)) {
+        return _signInOffline(
+          email: normalizedEmail,
+          password: password,
+          silent: silent,
+          hasRememberedAccount: hasRememberedAccount,
+        );
+      }
+      _sessionError = silent ? null : error.message;
+      _sessionNotice = null;
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> _signInOffline({
+    required String email,
+    required String password,
+    required bool silent,
+    required bool hasRememberedAccount,
+  }) async {
+    final cached = await _localStoreService.readSessionSnapshot(email) ??
+        await _localStoreService.readSection(email, 'session');
+    if (cached is! Map<String, dynamic>) {
+      _sessionError = silent
+          ? null
+          : (hasRememberedAccount
+              ? 'No se pudieron leer los datos locales de esta cuenta.'
+              : 'No existe una cuenta local con ese email.');
+      notifyListeners();
+      return false;
+    }
+
+    final accountJson = cached['account'];
+    final usersJson = cached['users'];
+    final branchesJson = cached['branches'];
+    if (accountJson is! Map<String, dynamic> ||
+        usersJson is! List<dynamic> ||
+        branchesJson is! List<dynamic>) {
+      _sessionError = silent ? null : 'La cuenta local está incompleta.';
+      notifyListeners();
+      return false;
+    }
+
+    final storedPassword = accountJson['password']?.toString() ?? '';
+    if (storedPassword != password) {
+      _sessionError = silent ? null : 'Credenciales inválidas.';
+      notifyListeners();
+      return false;
+    }
+
+    final users = usersJson.whereType<Map<String, dynamic>>().map(_userFromJson).toList();
+    final branches = branchesJson.whereType<Map<String, dynamic>>().map(_branchFromJson).toList();
+    _account = AccountProfile(
+      accountName: accountJson['account_name']?.toString() ?? 'P41',
+      ownerEmail: accountJson['owner_email']?.toString() ?? email,
+      password: storedPassword,
+      users: users,
+      branches: branches,
+    );
+    _accessToken = 'offline-local';
+    _businessId = cached['business_id']?.toString();
+    _isAuthenticated = true;
+    _shouldStartOnboarding = false;
+    final activeBranches = branches.where((branch) => branch.isActive).toList();
+    _activeBranch = _preferredBranchFrom(activeBranches) ??
+        (activeBranches.length == 1 ? activeBranches.first : null);
+    final availableUsers = _activeBranch == null
+        ? users.where((user) => user.isActive).toList()
+        : users
+            .where((user) => user.isActive && user.branchIds.contains(_activeBranch!.id))
+            .toList();
+    _activeUser = _preferredUserFrom(availableUsers) ??
+        (availableUsers.length == 1 ? availableUsers.first : null);
+    _persistedSession = PersistedSession(
+      email: email.trim(),
+      branchId: _activeBranch?.id,
+      userId: _activeUser?.id,
+    );
+    await _persistenceService.save(_persistedSession!);
+    _sessionError = null;
+    notifyListeners();
+    return true;
   }
 
   Future<bool> signInWithLocalPin({
@@ -323,7 +378,7 @@ class SessionController extends ChangeNotifier {
     _account = AccountProfile(
       accountName: accountJson['account_name']?.toString() ?? 'P41',
       ownerEmail: accountJson['owner_email']?.toString() ?? email,
-      password: _account?.password ?? '',
+      password: accountJson['password']?.toString() ?? '',
       users: users,
       branches: branches,
     );
@@ -362,10 +417,12 @@ class SessionController extends ChangeNotifier {
     _activeUser = null;
     _activeBranch = null;
     _sessionError = null;
+    _sessionNotice = null;
     _accessToken = null;
     _businessId = null;
     _persistedSession = null;
     _rememberedAccounts = const [];
+    _shouldStartOnboarding = false;
     _isBootstrapping = true;
     notifyListeners();
     await _bootstrap();
@@ -422,6 +479,7 @@ class SessionController extends ChangeNotifier {
     _businessId = null;
     _persistedSession = null;
     _sessionError = null;
+    _shouldStartOnboarding = false;
     notifyListeners();
     _persistenceService.clear();
   }
@@ -434,150 +492,48 @@ class SessionController extends ChangeNotifier {
     String? pin,
   }) async {
     final account = _account;
-    final token = _accessToken;
-    if (account == null || token == null) {
+    if (account == null) {
       return;
     }
-    if (_offlineOnly) {
-      final resolvedBranchIds = branchIds.isEmpty
-          ? allBranches.where((branch) => branch.isActive).map((branch) => branch.id).toList()
-          : branchIds;
-      final user = SessionUser(
-        id: 'local-user-${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        role: role,
-        initials: _buildInitials(name),
-        branchIds: resolvedBranchIds,
-        pin: (pin == null || pin.trim().isEmpty) ? '1234' : pin.trim(),
-        isActive: true,
+    final resolvedBranchIds = branchIds.isEmpty
+        ? allBranches.where((branch) => branch.isActive).map((branch) => branch.id).toList()
+        : branchIds;
+    final user = SessionUser(
+      id: 'local-user-${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      role: role,
+      initials: _buildInitials(name),
+      branchIds: resolvedBranchIds,
+      pin: (pin == null || pin.trim().isEmpty) ? '1234' : pin.trim(),
+      isActive: true,
+    );
+    _account = account.copyWith(users: [...account.users, user]);
+    _sessionError = 'Usuario guardado.';
+    await _saveSessionSnapshot();
+    notifyListeners();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_sessionError!)),
       );
-      _account = account.copyWith(users: [...account.users, user]);
-      _sessionError = 'Usuario guardado.';
-      await _saveSessionSnapshot();
-      notifyListeners();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_sessionError!)),
-        );
-      }
-      return;
-    }
-    try {
-      final payload = await _apiService.createStaff(
-        token: token,
-        name: name,
-        role: role,
-        pin: (pin == null || pin.trim().isEmpty) ? '1234' : pin.trim(),
-      );
-      final resolvedBranchIds = branchIds.isEmpty
-          ? allBranches.where((branch) => branch.isActive).map((branch) => branch.id).toList()
-          : branchIds;
-      final user = SessionUser(
-        id: payload.id,
-        name: payload.name,
-        role: _mapRole(payload.role),
-        initials: _buildInitials(payload.name),
-        branchIds: resolvedBranchIds,
-        pin: payload.pin,
-        isActive: payload.isActive,
-      );
-      _account = account.copyWith(
-        users: [...account.users, user],
-      );
-      await _saveSessionSnapshot();
-      notifyListeners();
-    } on SessionApiException catch (error) {
-      if (_isConnectivityError(error)) {
-        final resolvedBranchIds = branchIds.isEmpty
-            ? allBranches.where((branch) => branch.isActive).map((branch) => branch.id).toList()
-            : branchIds;
-        final user = SessionUser(
-          id: 'local-user-${DateTime.now().millisecondsSinceEpoch}',
-          name: name,
-          role: role,
-          initials: _buildInitials(name),
-          branchIds: resolvedBranchIds,
-          pin: (pin == null || pin.trim().isEmpty) ? '1234' : pin.trim(),
-          isActive: true,
-        );
-        _account = account.copyWith(users: [...account.users, user]);
-        await _saveSessionSnapshot();
-        _sessionError = 'Usuario guardado.';
-        notifyListeners();
-      } else {
-        _sessionError = error.message;
-        notifyListeners();
-      }
-      if (context.mounted && _sessionError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_sessionError!)),
-        );
-      }
     }
   }
 
   Future<void> updateUser(SessionUser user, {String? pin}) async {
     final account = _account;
-    final token = _accessToken;
-    if (account == null || token == null) {
+    if (account == null) {
       return;
     }
-    if (_offlineOnly) {
-      final updatedUser = user.copyWith(pin: pin);
-      final updatedUsers = account.users
-          .map((item) => item.id == user.id ? updatedUser : item)
-          .toList();
-      _account = account.copyWith(users: updatedUsers);
-      if (_activeUser?.id == user.id) {
-        _activeUser = updatedUser.isActive ? updatedUser : null;
-      }
-      _sessionError = 'Usuario actualizado.';
-      await _saveSessionSnapshot();
-      notifyListeners();
-      return;
+    final updatedUser = user.copyWith(pin: pin);
+    final updatedUsers = account.users
+        .map((item) => item.id == user.id ? updatedUser : item)
+        .toList();
+    _account = account.copyWith(users: updatedUsers);
+    if (_activeUser?.id == user.id) {
+      _activeUser = updatedUser.isActive ? updatedUser : null;
     }
-    try {
-      final payload = await _apiService.updateStaff(
-        token: token,
-        id: user.id,
-        name: user.name,
-        role: user.role,
-        isActive: user.isActive,
-        pin: pin,
-      );
-      final updatedUser = user.copyWith(
-        name: payload.name,
-        role: _mapRole(payload.role),
-        initials: _buildInitials(payload.name),
-        pin: payload.pin,
-        isActive: payload.isActive,
-      );
-      final updatedUsers = account.users
-          .map((item) => item.id == user.id ? updatedUser : item)
-          .toList();
-      _account = account.copyWith(users: updatedUsers);
-      if (_activeUser?.id == user.id) {
-        _activeUser = updatedUser.isActive ? updatedUser : null;
-      }
-      await _saveSessionSnapshot();
-      notifyListeners();
-    } on SessionApiException catch (error) {
-      if (_isConnectivityError(error)) {
-        final updatedUser = user.copyWith(pin: pin);
-        final updatedUsers = account.users
-            .map((item) => item.id == user.id ? updatedUser : item)
-            .toList();
-        _account = account.copyWith(users: updatedUsers);
-        if (_activeUser?.id == user.id) {
-          _activeUser = updatedUser.isActive ? updatedUser : null;
-        }
-        await _saveSessionSnapshot();
-        _sessionError = 'Usuario actualizado.';
-      } else {
-        _sessionError = error.message;
-      }
-      notifyListeners();
-    }
+    _sessionError = 'Usuario actualizado.';
+    await _saveSessionSnapshot();
+    notifyListeners();
   }
 
   Future<void> createBranch({
@@ -585,132 +541,45 @@ class SessionController extends ChangeNotifier {
     required String label,
   }) async {
     final account = _account;
-    final token = _accessToken;
-    if (account == null || token == null) {
+    if (account == null) {
       return;
     }
-    if (_offlineOnly) {
-      final branch = SessionBranch(
-        id: 'local-branch-${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        label: label,
-        isActive: true,
-      );
-      _account = account.copyWith(branches: [...account.branches, branch]);
-      _sessionError = 'Local guardado.';
-      await _saveSessionSnapshot();
-      notifyListeners();
-      return;
-    }
-    try {
-      final payload = await _apiService.createBranch(
-        token: token,
-        name: name,
-        label: label,
-        isActive: true,
-      );
-      final branch = SessionBranch(
-        id: payload.id,
-        name: payload.name,
-        label: payload.label,
-        isActive: payload.isActive,
-      );
-      _account = account.copyWith(
-        branches: [...account.branches, branch],
-      );
-      await _saveSessionSnapshot();
-      notifyListeners();
-    } on SessionApiException catch (error) {
-      if (_isConnectivityError(error)) {
-        final branch = SessionBranch(
-          id: 'local-branch-${DateTime.now().millisecondsSinceEpoch}',
-          name: name,
-          label: label,
-          isActive: true,
-        );
-        _account = account.copyWith(branches: [...account.branches, branch]);
-        await _saveSessionSnapshot();
-        _sessionError = 'Local guardado.';
-      } else {
-        _sessionError = error.message;
-      }
-      notifyListeners();
-    }
+    final branch = SessionBranch(
+      id: 'local-branch-${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      label: label,
+      isActive: true,
+    );
+    _account = account.copyWith(branches: [...account.branches, branch]);
+    _sessionError = 'Local guardado.';
+    await _saveSessionSnapshot();
+    notifyListeners();
   }
 
   Future<void> updateBranch(SessionBranch branch) async {
     final account = _account;
-    final token = _accessToken;
-    if (account == null || token == null) {
+    if (account == null) {
       return;
     }
-    if (_offlineOnly) {
-      final updatedBranches = account.branches
-          .map((item) => item.id == branch.id ? branch : item)
-          .toList();
-      _account = account.copyWith(branches: updatedBranches);
-      if (_activeBranch?.id == branch.id) {
-        _activeBranch = branch.isActive ? branch : null;
-        if (!branch.isActive) {
-          _activeUser = null;
-        }
+    final updatedBranches = account.branches
+        .map((item) => item.id == branch.id ? branch : item)
+        .toList();
+    _account = account.copyWith(branches: updatedBranches);
+    if (_activeBranch?.id == branch.id) {
+      _activeBranch = branch.isActive ? branch : null;
+      if (!branch.isActive) {
+        _activeUser = null;
       }
-      _sessionError = 'Local actualizado.';
-      await _saveSessionSnapshot();
-      notifyListeners();
-      return;
     }
-    try {
-      final payload = await _apiService.updateBranch(
-        token: token,
-        branchId: branch.id,
-        name: branch.name,
-        label: branch.label,
-        isActive: branch.isActive,
-      );
-      final updatedBranch = branch.copyWith(
-        name: payload.name,
-        label: payload.label,
-        isActive: payload.isActive,
-      );
-      final updatedBranches = account.branches
-          .map((item) => item.id == branch.id ? updatedBranch : item)
-          .toList();
-      _account = account.copyWith(branches: updatedBranches);
-      if (_activeBranch?.id == branch.id) {
-        _activeBranch = updatedBranch.isActive ? updatedBranch : null;
-        if (!updatedBranch.isActive) {
-          _activeUser = null;
-        }
-      }
-      await _saveSessionSnapshot();
-      notifyListeners();
-    } on SessionApiException catch (error) {
-      if (_isConnectivityError(error)) {
-        final updatedBranches = account.branches
-            .map((item) => item.id == branch.id ? branch : item)
-            .toList();
-        _account = account.copyWith(branches: updatedBranches);
-        if (_activeBranch?.id == branch.id) {
-          _activeBranch = branch.isActive ? branch : null;
-          if (!branch.isActive) {
-            _activeUser = null;
-          }
-        }
-        await _saveSessionSnapshot();
-        _sessionError = 'Local actualizado.';
-      } else {
-        _sessionError = error.message;
-      }
-      notifyListeners();
-    }
+    _sessionError = 'Local actualizado.';
+    await _saveSessionSnapshot();
+    notifyListeners();
   }
 
   Future<void> renameActiveBranch(String name) async {
     final branch = _activeBranch;
-    final token = _accessToken;
     final account = _account;
-    if (branch == null || token == null || account == null) {
+    if (branch == null || account == null) {
       return;
     }
 
@@ -718,55 +587,15 @@ class SessionController extends ChangeNotifier {
     if (trimmed.isEmpty || trimmed == branch.name) {
       return;
     }
-    if (_offlineOnly) {
-      final updatedBranch = branch.copyWith(name: trimmed);
-      final updatedBranches = account.branches
-          .map((item) => item.id == branch.id ? updatedBranch : item)
-          .toList();
-      _account = account.copyWith(branches: updatedBranches);
-      _activeBranch = updatedBranch;
-      _sessionError = 'Nombre guardado.';
-      await _saveSessionSnapshot();
-      notifyListeners();
-      return;
-    }
-
-    try {
-      final payload = await _apiService.updateBranch(
-        token: token,
-        branchId: branch.id,
-        name: trimmed,
-        label: branch.label,
-        isActive: branch.isActive,
-      );
-      final updatedBranch = branch.copyWith(
-        name: payload.name,
-        label: payload.label,
-        isActive: payload.isActive,
-      );
-      final updatedBranches = account.branches
-          .map((item) => item.id == branch.id ? updatedBranch : item)
-          .toList();
-      _account = account.copyWith(branches: updatedBranches);
-      _activeBranch = updatedBranch;
-      _sessionError = null;
-      await _saveSessionSnapshot();
-      notifyListeners();
-    } on SessionApiException catch (error) {
-      if (_isConnectivityError(error)) {
-        final updatedBranch = branch.copyWith(name: trimmed);
-        final updatedBranches = account.branches
-            .map((item) => item.id == branch.id ? updatedBranch : item)
-            .toList();
-        _account = account.copyWith(branches: updatedBranches);
-        _activeBranch = updatedBranch;
-        await _saveSessionSnapshot();
-        _sessionError = 'Nombre guardado.';
-      } else {
-        _sessionError = error.message;
-      }
-      notifyListeners();
-    }
+    final updatedBranch = branch.copyWith(name: trimmed);
+    final updatedBranches = account.branches
+        .map((item) => item.id == branch.id ? updatedBranch : item)
+        .toList();
+    _account = account.copyWith(branches: updatedBranches);
+    _activeBranch = updatedBranch;
+    _sessionError = 'Nombre guardado.';
+    await _saveSessionSnapshot();
+    notifyListeners();
   }
 
   String _buildInitials(String name) {
@@ -785,19 +614,19 @@ class SessionController extends ChangeNotifier {
     try {
       await _refreshRememberedAccounts();
       _offlineOnly = await _localStoreService.isOfflineOnly();
+      await _localStoreService.setOfflineOnly(true);
       _persistedSession = await _persistenceService.load();
-      if (_offlineOnly) {
-        _setupRequired = _rememberedAccounts.isEmpty;
-        if (_setupRequired) {
-          _persistedSession = null;
-          await _persistenceService.clear();
-        }
-        return;
-      }
-      _setupRequired = await _apiService.checkSetupRequired();
+      _setupRequired = _rememberedAccounts.isEmpty;
+      _preferLoginWhenSetupRequired = false;
       if (_setupRequired) {
         _persistedSession = null;
         await _persistenceService.clear();
+      } else if (_persistedSession != null) {
+        final restored = await _restorePersistedSession(_persistedSession!);
+        if (!restored) {
+          _persistedSession = null;
+          await _persistenceService.clear();
+        }
       }
     } finally {
       _isBootstrapping = false;
@@ -805,61 +634,37 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  void _hydrateFromServer(SessionBootstrapPayload payload, {required String password}) {
-    final branches = payload.branches.isEmpty
-        ? [
-            const SessionBranch(
-              id: 'default',
-              name: 'Sucursal principal',
-              label: 'Pendiente de sincronizacion',
-            ),
-          ]
-        : payload.branches
-            .map(
-              (branch) => SessionBranch(
-                id: branch.id,
-                name: branch.name,
-                label: branch.label,
-                isActive: branch.isActive,
-              ),
-            )
-            .toList();
+  Future<bool> _restorePersistedSession(PersistedSession persisted) async {
+    final cached = await _localStoreService.readSessionSnapshot(persisted.email) ??
+        await _localStoreService.readSection(persisted.email, 'session');
+    if (cached is! Map<String, dynamic>) {
+      return false;
+    }
 
-    final branchIds = branches.map((branch) => branch.id).toList();
-    final users = payload.staff.isEmpty
-        ? [
-            SessionUser(
-              id: payload.profile.userId,
-              name: payload.profile.displayName,
-              role: _mapRole(payload.profile.role),
-              initials: _buildInitials(payload.profile.displayName),
-              branchIds: branchIds,
-            ),
-          ]
-        : payload.staff
-            .map(
-              (user) => SessionUser(
-                id: user.id,
-                name: user.name,
-              role: _mapRole(user.role),
-              initials: _buildInitials(user.name),
-              branchIds: branchIds,
-              pin: user.pin,
-              isActive: user.isActive,
-            ),
-            )
-            .toList();
+    final accountJson = cached['account'];
+    final usersJson = cached['users'];
+    final branchesJson = cached['branches'];
+    if (accountJson is! Map<String, dynamic> ||
+        usersJson is! List<dynamic> ||
+        branchesJson is! List<dynamic>) {
+      return false;
+    }
 
+    final users = usersJson.whereType<Map<String, dynamic>>().map(_userFromJson).toList();
+    final branches = branchesJson.whereType<Map<String, dynamic>>().map(_branchFromJson).toList();
     _account = AccountProfile(
-      accountName: payload.profile.businessName,
-      ownerEmail: payload.profile.email,
-      password: password,
+      accountName: accountJson['account_name']?.toString() ?? 'P41',
+      ownerEmail: accountJson['owner_email']?.toString() ?? persisted.email,
+      password: accountJson['password']?.toString() ?? '',
       users: users,
       branches: branches,
     );
-    _accessToken = payload.auth.token;
-    _businessId = payload.profile.businessId;
+    _accessToken = cached['access_token']?.toString() ?? 'offline-local';
+    _businessId = cached['business_id']?.toString();
     _isAuthenticated = true;
+    _shouldStartOnboarding = false;
+    _sessionError = null;
+    _sessionNotice = null;
     final activeBranches = branches.where((branch) => branch.isActive).toList();
     _activeBranch = _preferredBranchFrom(activeBranches) ??
         (activeBranches.length == 1 ? activeBranches.first : null);
@@ -870,7 +675,7 @@ class SessionController extends ChangeNotifier {
             .toList();
     _activeUser = _preferredUserFrom(availableUsers) ??
         (availableUsers.length == 1 ? availableUsers.first : null);
-    _sessionError = null;
+    return true;
   }
 
   Future<void> _saveSessionSnapshot() async {
@@ -881,6 +686,7 @@ class SessionController extends ChangeNotifier {
     await _localStoreService.saveSessionSnapshot(
       scopeKey: account.ownerEmail,
       ownerEmail: account.ownerEmail,
+      password: account.password,
       accountName: account.accountName,
       accessToken: _accessToken ?? 'offline-local',
       businessId: _businessId,
@@ -890,61 +696,108 @@ class SessionController extends ChangeNotifier {
     await _refreshRememberedAccounts();
   }
 
-  Future<void> _createLocalAccount({
-    required String accountName,
-    required String ownerEmail,
-    required String password,
-  }) async {
-    await _refreshRememberedAccounts();
-    final normalizedEmail = ownerEmail.trim().toLowerCase();
-    final duplicate = _rememberedAccounts.any(
-      (account) => account.email.trim().toLowerCase() == normalizedEmail,
-    );
-    if (duplicate) {
-      _sessionError = 'Ya existe una cuenta guardada con ese email en este equipo.';
-      notifyListeners();
-      return;
-    }
+  void showLoginScreen() {
+    _preferLoginWhenSetupRequired = true;
+    _sessionError = null;
+    notifyListeners();
+  }
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final branch = SessionBranch(
-      id: 'local-branch-$timestamp',
-      name: accountName,
-      label: 'Operacion general',
-      isActive: true,
-    );
-    final owner = SessionUser(
-      id: 'local-owner-$timestamp',
-      name: accountName,
-      role: 'Administrador',
-      initials: _buildInitials(accountName),
-      branchIds: [branch.id],
-      pin: password,
-      isActive: true,
-    );
+  void showSetupScreen() {
+    _preferLoginWhenSetupRequired = false;
+    _sessionError = null;
+    notifyListeners();
+  }
+
+  Future<void> _completeRemoteSignIn(
+    RemoteBootstrapPayload remote, {
+    required String password,
+    required bool shouldStartOnboarding,
+  }) async {
+    final branches = remote.branches.isNotEmpty
+        ? remote.branches
+            .map(
+              (branch) => SessionBranch(
+                id: branch.id,
+                name: branch.name,
+                label: branch.label,
+                isActive: branch.isActive,
+              ),
+            )
+            .toList()
+        : [
+            SessionBranch(
+              id: 'remote-branch-${remote.profile.businessId.isEmpty ? remote.profile.email : remote.profile.businessId}',
+              name: remote.profile.businessName,
+              label: 'Operacion general',
+              isActive: true,
+            ),
+          ];
+
+    final branchIds = branches.map((branch) => branch.id).toList();
+    final users = remote.users.isNotEmpty
+        ? remote.users
+            .map(
+              (user) => SessionUser(
+                id: user.id,
+                name: user.name,
+                role: user.role,
+                initials: _buildInitials(user.name),
+                branchIds: branchIds,
+                pin: user.pin,
+                isActive: user.isActive,
+              ),
+            )
+            .toList()
+        : [
+            SessionUser(
+              id: remote.profile.userId,
+              name: remote.profile.displayName,
+              role: remote.profile.role,
+              initials: _buildInitials(remote.profile.displayName),
+              branchIds: branchIds,
+              isActive: true,
+            ),
+          ];
 
     _account = AccountProfile(
-      accountName: accountName,
-      ownerEmail: ownerEmail.trim(),
-      password: '',
-      users: [owner],
-      branches: [branch],
+      accountName: remote.profile.businessName,
+      ownerEmail: remote.profile.email,
+      password: password,
+      users: users,
+      branches: branches,
     );
-    _accessToken = 'offline-local';
-    _businessId = 'local-business-$timestamp';
+    _accessToken = remote.auth.token;
+    _businessId = remote.profile.businessId;
     _isAuthenticated = true;
+    _shouldStartOnboarding = shouldStartOnboarding;
     _setupRequired = false;
-    _activeBranch = branch;
-    _activeUser = owner;
+    _preferLoginWhenSetupRequired = false;
     _sessionError = null;
+    _sessionNotice = null;
+    final activeBranches = branches.where((branch) => branch.isActive).toList();
+    _activeBranch = _preferredBranchFrom(activeBranches) ??
+        (activeBranches.isNotEmpty ? activeBranches.first : null);
+    final availableUsers = _activeBranch == null
+        ? users.where((user) => user.isActive).toList()
+        : users
+            .where((user) => user.isActive && user.branchIds.contains(_activeBranch!.id))
+            .toList();
+    _activeUser = _preferredUserFrom(availableUsers) ??
+        (availableUsers.isNotEmpty ? availableUsers.first : null);
     _persistedSession = PersistedSession(
-      email: ownerEmail.trim(),
-      branchId: branch.id,
-      userId: owner.id,
+      email: remote.profile.email,
+      branchId: _activeBranch?.id,
+      userId: _activeUser?.id,
     );
     await _persistenceService.save(_persistedSession!);
     await _saveSessionSnapshot();
     notifyListeners();
+  }
+
+  bool _isConnectivityError(RemoteAuthException error) {
+    return error.statusCode == null &&
+        (error.message.contains('No se pudo conectar') ||
+            error.message.contains('Tiempo de espera'));
   }
 
   Future<void> _refreshRememberedAccounts() async {
@@ -1006,14 +859,6 @@ class SessionController extends ChangeNotifier {
     );
   }
 
-  bool _isConnectivityError(SessionApiException error) {
-    if (error.statusCode != null) {
-      return false;
-    }
-    return error.message.contains('No se pudo conectar') ||
-        error.message.contains('Tiempo de espera');
-  }
-
   SessionBranch? _preferredBranchFrom(List<SessionBranch> branches) {
     final preferredId = _persistedSession?.branchId;
     if (preferredId == null) {
@@ -1054,17 +899,4 @@ class SessionController extends ChangeNotifier {
     _persistenceService.save(_persistedSession!);
   }
 
-  String _mapRole(String role) {
-    switch (role.toLowerCase()) {
-      case 'owner':
-      case 'admin':
-        return 'Administrador';
-      case 'supervisor':
-        return 'Supervisor';
-      case 'cashier':
-        return 'Cajero';
-      default:
-        return role;
-    }
-  }
 }

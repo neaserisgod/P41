@@ -195,16 +195,32 @@ class _SupplierDetail extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final compactTable = constraints.maxWidth < 760;
+                if (compactTable) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 18),
+                    child: ListView.separated(
+                      itemCount: report.products.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final product = report.products[index];
+                        return _SupplierProductCard(product: product);
+                      },
+                    ),
+                  );
+                }
+
                 final tableWidth =
                     constraints.maxWidth < 940 ? 940.0 : constraints.maxWidth;
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: tableWidth,
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 18),
-                        Row(
+                return Column(
+                  children: [
+                    const SizedBox(height: 18),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: Row(
                           children: [
                             _HeaderCell(flex: 28, label: 'Producto'),
                             _HeaderCell(flex: 14, label: 'Categoría'),
@@ -217,15 +233,21 @@ class _SupplierDetail extends StatelessWidget {
                             _HeaderCell(flex: 12, label: 'Estado', alignEnd: true),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: ListView.separated(
-                            itemCount: report.products.length,
-                            separatorBuilder: (context, index) =>
-                                Divider(color: palette.border),
-                            itemBuilder: (context, index) {
-                              final product = report.products[index];
-                              return Row(
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: report.products.length,
+                        separatorBuilder: (context, index) =>
+                            Divider(color: palette.border),
+                        itemBuilder: (context, index) {
+                          final product = report.products[index];
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: tableWidth,
+                              child: Row(
                                 children: [
                                   Expanded(
                                     flex: 28,
@@ -247,18 +269,164 @@ class _SupplierDetail extends StatelessWidget {
                                   _ValueCell(flex: 12, value: _money(product.grossProfit), alignEnd: true, success: true),
                                   _ValueCell(flex: 12, value: product.status, alignEnd: true),
                                 ],
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
+                  ],
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SupplierProductCard extends StatelessWidget {
+  const _SupplierProductCard({required this.product});
+
+  final SupplierProductReport product;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: palette.surfaceMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: palette.textStrong,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.category,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _StatusPill(label: product.status),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _MiniMetric(label: 'Stock', value: '${product.stock}'),
+              _MiniMetric(label: 'Costo', value: _money(product.unitCost)),
+              _MiniMetric(label: 'Stock \$', value: _money(product.stockValueAtCost)),
+              _MiniMetric(label: 'Vend.', value: '${product.unitsSold}'),
+              _MiniMetric(label: 'Ingresos', value: _money(product.salesRevenue)),
+              _MiniMetric(
+                label: 'Ganancia',
+                value: _money(product.grossProfit),
+                success: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniMetric extends StatelessWidget {
+  const _MiniMetric({
+    required this.label,
+    required this.value,
+    this.success = false,
+  });
+
+  final String label;
+  final String value;
+  final bool success;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      constraints: const BoxConstraints(minWidth: 92),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: palette.textMuted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: success ? palette.success : palette.textStrong,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: palette.accentSoft.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: palette.textStrong,
+        ),
       ),
     );
   }

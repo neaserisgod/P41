@@ -3,6 +3,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $LauncherDir = "$ProjectRoot\launcher"
 $BackendBaseUrl = "http://31.97.166.250"
+$PlatformManifestUrl = "$BackendBaseUrl/api/platform/distribution/bootstrap-manifest"
 $UpdatesUrl = "$BackendBaseUrl/static/updates/p41/version.json"
 $CatalogUrl = "$BackendBaseUrl/static/bootstrap/p41/global_lookup.sqlite"
 $ImagesUrl = "$BackendBaseUrl/static/bootstrap/p41/imagenes_productos.zip"
@@ -17,6 +18,7 @@ flutter clean
 flutter pub get
 flutter build windows --release `
   --dart-define="P41_API_BASE_URL=$BackendBaseUrl" `
+  --dart-define="P41_PLATFORM_MANIFEST_URL=$PlatformManifestUrl" `
   --dart-define="P41_UPDATES_URL=$UpdatesUrl" `
   --dart-define="P41_CATALOG_URL=$CatalogUrl" `
   --dart-define="P41_IMAGES_URL=$ImagesUrl"

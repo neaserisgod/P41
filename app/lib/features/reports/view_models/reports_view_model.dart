@@ -21,6 +21,7 @@ class ReportsViewModel extends ChangeNotifier {
     _catalogController.addListener(_handleSourceChanged);
     _providersController.addListener(_handleSourceChanged);
     _salesController.addListener(_handleSourceChanged);
+    _cashController.addListener(_handleSourceChanged);
   }
 
   final CatalogController _catalogController;
@@ -186,6 +187,7 @@ class ReportsViewModel extends ChangeNotifier {
     _catalogController.removeListener(_handleSourceChanged);
     _providersController.removeListener(_handleSourceChanged);
     _salesController.removeListener(_handleSourceChanged);
+    _cashController.removeListener(_handleSourceChanged);
     super.dispose();
   }
 

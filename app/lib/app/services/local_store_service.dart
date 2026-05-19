@@ -87,15 +87,11 @@ class LocalStoreService {
   }
 
   Future<bool> isOfflineOnly() async {
-    final value = await readSection(_appScopeKey, _offlineOnlySection);
-    if (value is bool) {
-      return value;
-    }
     return true;
   }
 
   Future<void> setOfflineOnly(bool value) {
-    return writeSection(_appScopeKey, _offlineOnlySection, value);
+    return writeSection(_appScopeKey, _offlineOnlySection, true);
   }
 
   Future<List<Map<String, String>>> listRememberedAccounts() async {
@@ -131,6 +127,7 @@ class LocalStoreService {
     required String scopeKey,
     required String ownerEmail,
     required String accountName,
+    required String password,
     required String accessToken,
     required String? businessId,
     required List<Map<String, dynamic>> users,
@@ -141,15 +138,16 @@ class LocalStoreService {
     try {
       db.execute(
         '''
-        INSERT INTO session_accounts(scope_key, owner_email, account_name, access_token, business_id)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO session_accounts(scope_key, owner_email, account_name, local_password, access_token, business_id)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(scope_key) DO UPDATE SET
           owner_email = excluded.owner_email,
           account_name = excluded.account_name,
+          local_password = excluded.local_password,
           access_token = excluded.access_token,
           business_id = excluded.business_id
         ''',
-        [scopeKey, ownerEmail, accountName, accessToken, businessId],
+        [scopeKey, ownerEmail, accountName, password, accessToken, businessId],
       );
       db.execute('DELETE FROM session_users WHERE scope_key = ?', [scopeKey]);
       db.execute('DELETE FROM session_branches WHERE scope_key = ?', [scopeKey]);
@@ -202,6 +200,7 @@ class LocalStoreService {
     final accountRows = db.select(
       '''
       SELECT owner_email, account_name, access_token, business_id
+      , local_password
       FROM session_accounts WHERE scope_key = ? LIMIT 1
       ''',
       [scopeKey],
@@ -232,6 +231,7 @@ class LocalStoreService {
       'account': {
         'account_name': account['account_name']?.toString() ?? 'P41',
         'owner_email': account['owner_email']?.toString() ?? scopeKey,
+        'password': account['local_password']?.toString() ?? '',
       },
       'users': userRows
           .map(
@@ -971,10 +971,12 @@ class LocalStoreService {
         scope_key TEXT PRIMARY KEY,
         owner_email TEXT NOT NULL,
         account_name TEXT NOT NULL,
+        local_password TEXT NOT NULL DEFAULT '',
         access_token TEXT NOT NULL,
         business_id TEXT
       )
     ''');
+    _ensureSessionAccountColumns(db);
     db.execute('''
       CREATE TABLE IF NOT EXISTS session_users (
         scope_key TEXT NOT NULL,
@@ -1006,6 +1008,17 @@ class LocalStoreService {
         user_id TEXT
       )
     ''');
+  }
+
+  void _ensureSessionAccountColumns(Database db) {
+    final rows = db.select("PRAGMA table_info('session_accounts')");
+    final names = rows
+        .map((row) => row['name']?.toString() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    if (!names.contains('local_password')) {
+      db.execute("ALTER TABLE session_accounts ADD COLUMN local_password TEXT NOT NULL DEFAULT ''");
+    }
   }
 
   void _ensureCatalogProductColumns(Database db) {

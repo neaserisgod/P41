@@ -5,10 +5,18 @@ import '../models/workspace_tab.dart';
 class TabManager extends ChangeNotifier {
   TabManager._(this._tabs, this._activeTabId);
 
-  factory TabManager.initial() {
+  factory TabManager.initial({
+    WorkspaceKind activeKind = WorkspaceKind.pos,
+  }) {
     final left = destinationForKind(WorkspaceKind.home);
     final center = destinationForKind(WorkspaceKind.pos);
     final right = destinationForKind(WorkspaceKind.products);
+    final activeTabId = switch (activeKind) {
+      WorkspaceKind.home => 'slot-left',
+      WorkspaceKind.pos => 'slot-pos',
+      WorkspaceKind.products => 'slot-right',
+      _ => 'slot-pos',
+    };
     return TabManager._(
       [
         WorkspaceTab(
@@ -36,7 +44,7 @@ class TabManager extends ChangeNotifier {
           closable: false,
         ),
       ],
-      'slot-pos',
+      activeTabId,
     );
   }
 

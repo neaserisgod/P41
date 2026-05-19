@@ -3,40 +3,34 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/models/session_context.dart';
-import '../../../app/services/cash_api_service.dart';
 import '../../../app/services/local_store_service.dart';
 import '../../pos/models/sale_models.dart';
 import '../models/cash_shift.dart';
 
 class CashController extends ChangeNotifier {
   CashController({
-    required String accessToken,
     required SessionBranch initialBranch,
     required String scopeKey,
-    CashApiService? apiService,
     LocalStoreService? localStoreService,
-  })  : _accessToken = accessToken,
-        _activeBranch = initialBranch,
+  })  : _activeBranch = initialBranch,
         _scopeKey = scopeKey,
-        _apiService = apiService ?? CashApiService(),
         _localStoreService = localStoreService ?? LocalStoreService() {
     unawaited(reload());
   }
 
-  final CashApiService _apiService;
   final LocalStoreService _localStoreService;
   final List<CashShift> _history = [];
-  final String _deviceId = 'p41-desktop';
-  String _accessToken;
   SessionBranch _activeBranch;
   String _scopeKey;
   bool _isLoading = false;
   String? _errorMessage;
+  String? _statusMessage;
   bool _separateCigarettes = false;
 
   List<CashShift> get history => List.unmodifiable(_history.reversed);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  String? get statusMessage => _statusMessage;
   bool get separateCigarettes => _separateCigarettes;
 
   CashShift shiftForBranch(SessionBranch branch) {
@@ -82,77 +76,24 @@ class CashController extends ChangeNotifier {
   Future<void> reload() async {
     _isLoading = true;
     _errorMessage = null;
+    _statusMessage = null;
     notifyListeners();
     await _restoreSettings();
-    if (await _localStoreService.isOfflineOnly()) {
-      final restored = await _restoreLocalSnapshot();
-      _errorMessage = restored ? null : 'Todavía no hay movimientos de caja.';
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-    try {
-      final localCigaretteShifts = _history
-          .where((shift) => shift.branchId == _activeBranch.id && shift.registerKind == CashRegisterKind.cigarettes)
-          .toList();
-      final branchId = int.tryParse(_activeBranch.id);
-      final historyPayload = await _apiService.listShifts(
-        token: _accessToken,
-        branchId: branchId,
-      );
-      final currentPayload = await _apiService.currentShift(
-        token: _accessToken,
-        branchId: branchId,
-        deviceId: _deviceId,
-      );
-      _history
-        ..clear()
-        ..addAll(historyPayload.map((entry) => _shiftFromApi(entry, branchName: _activeBranch.name)));
-      _history.addAll(localCigaretteShifts);
-
-      if (currentPayload != null && currentPayload.isNotEmpty) {
-        final currentId = currentPayload['id']?.toString();
-        Map<String, dynamic>? summary;
-        if (currentId != null) {
-          summary = await _apiService.shiftSummary(
-            token: _accessToken,
-            shiftId: currentId,
-          );
-        }
-        final current = _shiftFromApi(
-          currentPayload,
-          branchName: _activeBranch.name,
-          summary: summary,
-        );
-        final index = _history.indexWhere((shift) => shift.id == current.id);
-        if (index == -1) {
-          _history.add(current);
-        } else {
-          _history[index] = current;
-        }
-      }
-      await _saveLocalSnapshot();
-    } on CashApiException catch (error) {
-      final restored = await _restoreLocalSnapshot();
-      _errorMessage = restored ? null : error.message;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    final restored = await _restoreLocalSnapshot();
+    _statusMessage = restored ? null : 'Todavía no hay movimientos de caja.';
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> updateSession({
-    required String accessToken,
     required SessionBranch activeBranch,
     required String scopeKey,
   }) async {
-    final tokenChanged = _accessToken != accessToken;
     final branchChanged = _activeBranch.id != activeBranch.id;
     final scopeChanged = _scopeKey != scopeKey;
-    _accessToken = accessToken;
     _activeBranch = activeBranch;
     _scopeKey = scopeKey;
-    if (tokenChanged || branchChanged || scopeChanged) {
+    if (branchChanged || scopeChanged) {
       await reload();
     }
   }
@@ -166,48 +107,14 @@ class CashController extends ChangeNotifier {
     if (current.isOpen) {
       return;
     }
-    if (await _localStoreService.isOfflineOnly()) {
-      _openLocalGeneralShift(branch: branch, user: user, openingAmount: amounts.general);
-      if (_separateCigarettes) {
-        _openLocalCigaretteShift(branch: branch, user: user, openingAmount: amounts.cigarettes);
-      }
-      await _saveLocalSnapshot();
-      _errorMessage = 'Caja abierta.';
-      notifyListeners();
-      return;
+    _errorMessage = null;
+    _openLocalGeneralShift(branch: branch, user: user, openingAmount: amounts.general);
+    if (_separateCigarettes) {
+      _openLocalCigaretteShift(branch: branch, user: user, openingAmount: amounts.cigarettes);
     }
-    try {
-      await _apiService.openShift(
-        token: _accessToken,
-        body: {
-          'initial_cash': amounts.general,
-          'branch_id': int.tryParse(branch.id),
-          if (user.pin != null && user.pin!.trim().isNotEmpty)
-            'staff_id': int.tryParse(user.id)
-          else
-            'user_id': int.tryParse(user.id),
-          'device_id': _deviceId,
-        },
-      );
-      if (_separateCigarettes) {
-        _openLocalCigaretteShift(branch: branch, user: user, openingAmount: amounts.cigarettes);
-      }
-      await reload();
-      if (_separateCigarettes) {
-        await _saveLocalSnapshot();
-        notifyListeners();
-      }
-    } on CashApiException catch (error) {
-      _openLocalGeneralShift(branch: branch, user: user, openingAmount: amounts.general);
-      if (_separateCigarettes) {
-        _openLocalCigaretteShift(branch: branch, user: user, openingAmount: amounts.cigarettes);
-      }
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Caja abierta.'
-          : error.message;
-      notifyListeners();
-    }
+    await _saveLocalSnapshot();
+    _statusMessage = 'Caja abierta.';
+    notifyListeners();
   }
 
   Future<void> closeShift({
@@ -224,47 +131,18 @@ class CashController extends ChangeNotifier {
     if (index == -1) {
       return;
     }
-    if (await _localStoreService.isOfflineOnly()) {
-      final current = _history[index];
-      _history[index] = current.copyWith(
-        status: CashShiftStatus.closed,
-        countedAmount: amounts.general,
-        closedAtLabel: _formatDateTime(DateTime.now().toIso8601String()),
-        closedBy: user.name,
-      );
-      _closeLocalCigaretteShift(branch: branch, user: user, countedAmount: amounts.cigarettes);
-      await _saveLocalSnapshot();
-      _errorMessage = 'Caja cerrada.';
-      notifyListeners();
-      return;
-    }
-    try {
-      await _apiService.closeShift(
-        token: _accessToken,
-        shiftId: _history[index].id,
-        countedCash: amounts.general,
-      );
-      _closeLocalCigaretteShift(branch: branch, user: user, countedAmount: amounts.cigarettes);
-      await reload();
-      if (_separateCigarettes) {
-        await _saveLocalSnapshot();
-        notifyListeners();
-      }
-    } on CashApiException catch (error) {
-      final current = _history[index];
-      _history[index] = current.copyWith(
-        status: CashShiftStatus.closed,
-        countedAmount: amounts.general,
-        closedAtLabel: _formatDateTime(DateTime.now().toIso8601String()),
-        closedBy: user.name,
-      );
-      _closeLocalCigaretteShift(branch: branch, user: user, countedAmount: amounts.cigarettes);
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Caja cerrada.'
-          : error.message;
-      notifyListeners();
-    }
+    _errorMessage = null;
+    final current = _history[index];
+    _history[index] = current.copyWith(
+      status: CashShiftStatus.closed,
+      countedAmount: amounts.general,
+      closedAtLabel: _formatDateTime(DateTime.now().toIso8601String()),
+      closedBy: user.name,
+    );
+    _closeLocalCigaretteShift(branch: branch, user: user, countedAmount: amounts.cigarettes);
+    await _saveLocalSnapshot();
+    _statusMessage = 'Caja cerrada.';
+    notifyListeners();
   }
 
   void registerSale({
@@ -346,6 +224,7 @@ class CashController extends ChangeNotifier {
   }
 
   Future<void> updateSeparateCigarettes(bool value) async {
+    _errorMessage = null;
     _separateCigarettes = value;
     await _localStoreService.writeSection(
       _scopeKey,
@@ -387,6 +266,9 @@ class CashController extends ChangeNotifier {
       );
       await _saveLocalSnapshot();
     }
+    _statusMessage = value
+        ? 'Caja separada de cigarrillos activada.'
+        : 'Caja separada de cigarrillos desactivada.';
     notifyListeners();
   }
 
@@ -456,40 +338,6 @@ class CashController extends ChangeNotifier {
       closedBy: json['closed_by']?.toString(),
     );
   }
-
-  bool _isConnectivityError(CashApiException error) {
-    return error.statusCode == null &&
-        (error.message.contains('No se pudo conectar') || error.message.contains('Tiempo de espera'));
-  }
-
-  CashShift _shiftFromApi(
-    Map<String, dynamic> json, {
-    required String branchName,
-    Map<String, dynamic>? summary,
-  }) {
-    final start = _formatDateTime(json['start_time']?.toString());
-    final end = _formatDateTime(json['end_time']?.toString());
-    return CashShift(
-      id: json['id'].toString(),
-      branchId: json['branch_id']?.toString() ?? _activeBranch.id,
-      branchName: branchName,
-      registerName: 'Caja',
-      registerKind: CashRegisterKind.general,
-      status: (json['status']?.toString() ?? 'closed') == 'open'
-          ? CashShiftStatus.open
-          : CashShiftStatus.closed,
-      openedBy: json['staff_id']?.toString() ?? json['user_id']?.toString(),
-      openedAtLabel: start,
-      openingAmount: (json['initial_cash'] as num?)?.toDouble(),
-      expectedAmount: (summary?['expected_cash'] as num?)?.toDouble() ?? (json['expected_cash'] as num?)?.toDouble(),
-      cashSalesTotal: ((summary?['expected_cash'] as num?)?.toDouble() ?? (json['expected_cash'] as num?)?.toDouble() ?? 0) -
-          ((json['initial_cash'] as num?)?.toDouble() ?? 0),
-      countedAmount: (json['counted_cash'] as num?)?.toDouble(),
-      closedAtLabel: end,
-      closedBy: json['staff_id']?.toString() ?? json['user_id']?.toString(),
-    );
-  }
-
   String? _formatDateTime(String? value) {
     final date = value == null ? null : DateTime.tryParse(value)?.toLocal();
     if (date == null) {
@@ -589,7 +437,11 @@ class CashController extends ChangeNotifier {
     return shift.copyWith(
       cashSalesTotal: nextCashSales,
       virtualSalesTotal: nextVirtualSales,
-      expectedAmount: (shift.openingAmount ?? 0) + nextCashSales,
+      expectedAmount: _expectedAmountFor(
+        shift: shift,
+        cashSalesTotal: nextCashSales,
+        virtualSalesTotal: nextVirtualSales,
+      ),
     );
   }
 
@@ -605,8 +457,24 @@ class CashController extends ChangeNotifier {
     return shift.copyWith(
       cashSalesTotal: nextCashSales,
       virtualSalesTotal: nextVirtualSales,
-      expectedAmount: (shift.openingAmount ?? 0) + nextCashSales,
+      expectedAmount: _expectedAmountFor(
+        shift: shift,
+        cashSalesTotal: nextCashSales,
+        virtualSalesTotal: nextVirtualSales,
+      ),
     );
+  }
+
+  double _expectedAmountFor({
+    required CashShift shift,
+    required double cashSalesTotal,
+    required double virtualSalesTotal,
+  }) {
+    final openingAmount = shift.openingAmount ?? 0;
+    if (shift.registerKind == CashRegisterKind.cigarettes) {
+      return openingAmount + cashSalesTotal + virtualSalesTotal;
+    }
+    return openingAmount + cashSalesTotal;
   }
 
   int _resolveGeneralShiftIndex({

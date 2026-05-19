@@ -44,6 +44,7 @@ class PosScreen extends StatefulWidget {
 
 class _PosScreenState extends State<PosScreen> {
   late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
 
   @override
   void initState() {
@@ -51,10 +52,17 @@ class _PosScreenState extends State<PosScreen> {
     _searchController = TextEditingController(
       text: widget.salesController.query,
     );
+    _searchFocusNode = FocusNode();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _searchFocusNode.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -70,7 +78,9 @@ class _PosScreenState extends State<PosScreen> {
         builder: (context, constraints) {
           final viewport = constraints.viewport;
           final roomy = constraints.maxWidth >= 1500;
-          final stacked = viewport.stackedPanels;
+          final stacked =
+              constraints.maxWidth < 1180 ||
+              (constraints.maxWidth < 1360 && constraints.maxHeight < 760);
           final outerPadding = roomy ? 26.0 : viewport.pagePadding;
 
           return AnimatedBuilder(
@@ -104,11 +114,14 @@ class _PosScreenState extends State<PosScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    _ProductPane(
-                                      controller: _searchController,
-                                      salesController: widget.salesController,
-                                      categories: categories,
-                                      visibleProducts: visibleProducts,
+                                    Expanded(
+                                      child: _ProductPane(
+                                        controller: _searchController,
+                                        focusNode: _searchFocusNode,
+                                        salesController: widget.salesController,
+                                        categories: categories,
+                                        visibleProducts: visibleProducts,
+                                      ),
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
@@ -125,6 +138,7 @@ class _PosScreenState extends State<PosScreen> {
                                       flex: 60,
                                       child: _ProductPane(
                                         controller: _searchController,
+                                        focusNode: _searchFocusNode,
                                         salesController: widget.salesController,
                                         categories: categories,
                                         visibleProducts: visibleProducts,
@@ -193,7 +207,9 @@ class _PosScreenState extends State<PosScreen> {
             }
           } else if (mounted) {
             messenger.showSnackBar(
-              const SnackBar(content: Text('No se pudo registrar la venta.')),
+              const SnackBar(
+                content: Text('La venta no se pudo guardar. Revisá caja y productos del carrito.'),
+              ),
             );
           }
         } catch (_) {
@@ -213,12 +229,14 @@ class _PosScreenState extends State<PosScreen> {
 class _ProductPane extends StatelessWidget {
   const _ProductPane({
     required this.controller,
+    required this.focusNode,
     required this.salesController,
     required this.categories,
     required this.visibleProducts,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final SalesController salesController;
   final List<String> categories;
   final List<CatalogProduct> visibleProducts;
@@ -233,7 +251,15 @@ class _ProductPane extends StatelessWidget {
           children: [
             PosSearchBar(
               controller: controller,
+              focusNode: focusNode,
               onChanged: salesController.setQuery,
+              onSubmit: (_) {
+                if (visibleProducts.isEmpty) {
+                  return;
+                }
+                salesController.addProduct(visibleProducts.first);
+                focusNode.requestFocus();
+              },
             ),
             SizedBox(height: viewport.shortHeight ? 10 : 12),
             SizedBox(

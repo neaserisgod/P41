@@ -42,12 +42,14 @@ class InventoryViewModel extends ChangeNotifier {
       };
 
   void updateLocations(List<InventoryLocation> locations) {
-    _locations = locations;
+    final nextLocations = List<InventoryLocation>.unmodifiable(locations);
+    _locations = nextLocations;
     final locationExists = _locations.any((location) => location.id == _selectedLocationId);
     if (!locationExists) {
       _selectedLocationId = null;
       _selectedProviderId = null;
       _step = InventoryStep.locations;
+      notifyListeners();
       return;
     }
 
@@ -58,6 +60,7 @@ class InventoryViewModel extends ChangeNotifier {
         _step = InventoryStep.providers;
       }
     }
+    notifyListeners();
   }
 
   void enterLocation(InventoryLocation location) {

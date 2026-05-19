@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../../app/models/catalog_product.dart';
 import '../../../app/services/local_store_service.dart';
 import '../../../app/models/session_context.dart';
-import '../../../app/services/providers_api_service.dart';
 import '../../../app/state/catalog_controller.dart';
 import '../../pos/models/sale_models.dart';
 import '../models/provider_record.dart';
@@ -13,28 +12,22 @@ import '../models/provider_record.dart';
 class ProvidersController extends ChangeNotifier {
   ProvidersController({
     required CatalogController catalogController,
-    required String accessToken,
     required SessionBranch initialBranch,
     required String scopeKey,
-    ProvidersApiService? apiService,
     LocalStoreService? localStoreService,
   })  : _catalogController = catalogController,
-        _accessToken = accessToken,
         _activeBranch = initialBranch,
         _scopeKey = scopeKey,
-        _apiService = apiService ?? ProvidersApiService(),
         _localStoreService = localStoreService ?? LocalStoreService() {
     _catalogController.addListener(_handleCatalogChanged);
     unawaited(reload());
   }
 
   final CatalogController _catalogController;
-  final ProvidersApiService _apiService;
   final LocalStoreService _localStoreService;
   final List<ProviderOrder> _orders = [];
   final Map<String, List<DraftOrderItem>> _draftItemsByProvider = {};
-  final String _deviceId = 'p41-desktop';
-  String _accessToken;
+  final Map<String, List<DraftOrderItem>> _suggestedItemsByProvider = {};
   SessionBranch _activeBranch;
   String _scopeKey;
   List<ProviderRecord> _providers = const [];
@@ -60,8 +53,11 @@ class ProvidersController extends ChangeNotifier {
   List<ProviderOrder> get selectedOrders =>
       _orders.where((order) => order.providerId == _selectedProviderId).toList().reversed.toList();
   List<DraftOrderItem> get draftItems => List.unmodifiable(_draftItemsFor(_selectedProviderId));
+  List<DraftOrderItem> get suggestedItems =>
+      List.unmodifiable(_suggestedItemsFor(_selectedProviderId));
   int get draftUnits => draftItems.fold(0, (sum, item) => sum + item.quantity);
   double get draftTotal => draftItems.fold(0, (sum, item) => sum + item.total);
+  int get suggestedUnits => suggestedItems.fold(0, (sum, item) => sum + item.quantity);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   List<ProviderOrder> get orders => List.unmodifiable(_orders);
@@ -76,57 +72,21 @@ class ProvidersController extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
-    if (await _localStoreService.isOfflineOnly()) {
-      final restored = await _restoreLocalSnapshot();
-      _errorMessage = restored ? null : 'Todavía no hay proveedores guardados.';
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-    try {
-      final branchId = int.tryParse(_activeBranch.id);
-      final supplierPayload = await _apiService.listSuppliers(
-        token: _accessToken,
-        branchId: branchId,
-      );
-      final orderPayload = await _apiService.listOrders(
-        token: _accessToken,
-        branchId: branchId,
-      );
-      _providers = supplierPayload.map(_providerFromApi).toList()
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      await _syncCatalogSupplierReferences();
-      _orders
-        ..clear()
-        ..addAll(orderPayload.map(_orderFromApi));
-      await _saveLocalSnapshot();
-      if (_providers.isNotEmpty) {
-        final exists = _providers.any((provider) => provider.id == _selectedProviderId);
-        _selectedProviderId = exists ? _selectedProviderId : _providers.first.id;
-      } else {
-        _selectedProviderId = '';
-      }
-    } on ProvidersApiException catch (error) {
-      final restored = await _restoreLocalSnapshot();
-      _errorMessage = restored ? null : error.message;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    final restored = await _restoreLocalSnapshot();
+    _errorMessage = restored ? null : 'Todavía no hay proveedores guardados.';
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> updateSession({
-    required String accessToken,
     required SessionBranch activeBranch,
     required String scopeKey,
   }) async {
-    final tokenChanged = _accessToken != accessToken;
     final branchChanged = _activeBranch.id != activeBranch.id;
     final scopeChanged = _scopeKey != scopeKey;
-    _accessToken = accessToken;
     _activeBranch = activeBranch;
     _scopeKey = scopeKey;
-    if (tokenChanged || branchChanged || scopeChanged) {
+    if (branchChanged || scopeChanged) {
       await reload();
     }
   }
@@ -149,140 +109,38 @@ class ProvidersController extends ChangeNotifier {
     required List<int> deliveryDays,
     bool isActive = true,
   }) async {
-    final slug = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-    final branchId = int.tryParse(_activeBranch.id);
-    if (await _localStoreService.isOfflineOnly()) {
-      final localProvider = ProviderRecord(
-        id: 'local-supplier-${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        contact: contact,
-        phone: phone,
-        email: email,
-        category: category,
-        isActive: isActive,
-        orderDays: orderDays,
-        deliveryDays: deliveryDays,
-      );
-      _providers = [..._providers, localProvider]
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      await _catalogController.upsertSupplierReference(
-        supplierId: localProvider.id,
-        supplierName: localProvider.name,
-      );
-      _selectedProviderId = localProvider.id;
-      await _saveLocalSnapshot();
-      _errorMessage = 'Proveedor guardado.';
-      notifyListeners();
-      return;
-    }
-    try {
-      final response = await _apiService.createSupplier(
-        token: _accessToken,
-        body: {
-          'id': '$slug-${DateTime.now().millisecondsSinceEpoch}',
-          'name': name,
-          'contact_name': contact,
-          'phone': phone.trim().isEmpty ? null : phone.trim(),
-          'email': email.trim().isEmpty ? null : email.trim(),
-          'notes': _notesFor(
-            category: category,
-            isActive: isActive,
-            orderDays: orderDays,
-          ),
-          'delivery_days': _serializeDays(deliveryDays),
-          'branch_id': branchId,
-          'device_id': _deviceId,
-        },
-      );
-      final provider = _providerFromApi(response);
-      _providers = [..._providers, provider]
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      await _catalogController.upsertSupplierReference(
-        supplierId: provider.id,
-        supplierName: provider.name,
-      );
-      _selectedProviderId = provider.id;
-      await _saveLocalSnapshot();
-      notifyListeners();
-    } on ProvidersApiException catch (error) {
-      final localProvider = ProviderRecord(
-        id: 'local-supplier-${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        contact: contact,
-        phone: phone,
-        email: email,
-        category: category,
-        isActive: isActive,
-        orderDays: orderDays,
-        deliveryDays: deliveryDays,
-      );
-      _providers = [..._providers, localProvider]
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      await _catalogController.upsertSupplierReference(
-        supplierId: localProvider.id,
-        supplierName: localProvider.name,
-      );
-      _selectedProviderId = localProvider.id;
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Proveedor guardado.'
-          : error.message;
-      notifyListeners();
-    }
+    final localProvider = ProviderRecord(
+      id: 'local-supplier-${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      contact: contact,
+      phone: phone,
+      email: email,
+      category: category,
+      isActive: isActive,
+      orderDays: orderDays,
+      deliveryDays: deliveryDays,
+    );
+    _providers = [..._providers, localProvider]
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    await _catalogController.upsertSupplierReference(
+      supplierId: localProvider.id,
+      supplierName: localProvider.name,
+    );
+    _selectedProviderId = localProvider.id;
+    await _saveLocalSnapshot();
+    _errorMessage = 'Proveedor guardado.';
+    notifyListeners();
   }
 
   Future<void> updateProvider(ProviderRecord provider) async {
-    if (await _localStoreService.isOfflineOnly()) {
-      _providers = _providers.map((item) => item.id == provider.id ? provider : item).toList();
-      await _catalogController.upsertSupplierReference(
-        supplierId: provider.id,
-        supplierName: provider.name,
-      );
-      await _saveLocalSnapshot();
-      _errorMessage = 'Proveedor actualizado.';
-      notifyListeners();
-      return;
-    }
-    try {
-      final response = await _apiService.updateSupplier(
-        token: _accessToken,
-        supplierId: provider.id,
-        body: {
-          'id': provider.id,
-          'name': provider.name,
-          'contact_name': provider.contact,
-          'phone': provider.phone.trim().isEmpty ? null : provider.phone.trim(),
-          'email': provider.email.trim().isEmpty ? null : provider.email.trim(),
-          'notes': _notesFor(
-            category: provider.category,
-            isActive: provider.isActive,
-            orderDays: provider.orderDays,
-          ),
-          'delivery_days': _serializeDays(provider.deliveryDays),
-          'branch_id': int.tryParse(_activeBranch.id),
-          'device_id': _deviceId,
-        },
-      );
-      final updated = _providerFromApi(response);
-      _providers = _providers.map((item) => item.id == provider.id ? updated : item).toList();
-      await _catalogController.upsertSupplierReference(
-        supplierId: updated.id,
-        supplierName: updated.name,
-      );
-      await _saveLocalSnapshot();
-      notifyListeners();
-    } on ProvidersApiException catch (error) {
-      _providers = _providers.map((item) => item.id == provider.id ? provider : item).toList();
-      await _catalogController.upsertSupplierReference(
-        supplierId: provider.id,
-        supplierName: provider.name,
-      );
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Proveedor actualizado.'
-          : error.message;
-      notifyListeners();
-    }
+    _providers = _providers.map((item) => item.id == provider.id ? provider : item).toList();
+    await _catalogController.upsertSupplierReference(
+      supplierId: provider.id,
+      supplierName: provider.name,
+    );
+    await _saveLocalSnapshot();
+    _errorMessage = 'Proveedor actualizado.';
+    notifyListeners();
   }
 
   List<ProviderCatalogItem> catalogForProvider(String providerId) {
@@ -313,6 +171,43 @@ class ProvidersController extends ChangeNotifier {
       draft[index] = draft[index].copyWith(quantity: draft[index].quantity + 1);
     }
     _persistDrafts();
+    notifyListeners();
+  }
+
+  Future<void> absorbSuggestedItems() async {
+    final providerId = _selectedProviderId;
+    if (providerId.isEmpty) {
+      return;
+    }
+    final suggestions = _suggestedItemsFor(providerId);
+    if (suggestions.isEmpty) {
+      return;
+    }
+    final draft = _draftItemsFor(providerId);
+    for (final suggestion in suggestions) {
+      final index = draft.indexWhere((entry) => entry.item.id == suggestion.item.id);
+      if (index == -1) {
+        draft.add(suggestion);
+      } else {
+        draft[index] = draft[index].copyWith(
+          quantity: draft[index].quantity + suggestion.quantity,
+        );
+      }
+    }
+    suggestions.clear();
+    await _saveLocalSnapshot();
+    _errorMessage = 'Sugerencias pasadas al pedido.';
+    notifyListeners();
+  }
+
+  Future<void> clearSuggestedItems() async {
+    final suggestions = _suggestedItemsFor(_selectedProviderId);
+    if (suggestions.isEmpty) {
+      return;
+    }
+    suggestions.clear();
+    await _saveLocalSnapshot();
+    _errorMessage = 'Sugerencias descartadas.';
     notifyListeners();
   }
 
@@ -351,60 +246,20 @@ class ProvidersController extends ChangeNotifier {
     }
     final now = DateTime.now();
     final localOrderId = 'order-${provider.id}-${now.millisecondsSinceEpoch}';
-    if (await _localStoreService.isOfflineOnly()) {
-      final localOrder = ProviderOrder(
-        id: localOrderId,
-        providerId: provider.id,
-        dateLabel: _dateLabel(now.toIso8601String()),
-        createdAt: now,
-        status: 'Pendiente',
-        total: draftTotal,
-        items: List<DraftOrderItem>.from(draft),
-      );
-      _upsertOrder(localOrder);
-      draft.clear();
-      await _saveLocalSnapshot();
-      _errorMessage = 'Pedido emitido.';
-      notifyListeners();
-      return;
-    }
-    try {
-      final response = await _apiService.createOrder(
-        token: _accessToken,
-        body: {
-          'local_id': localOrderId,
-          'device_id': _deviceId,
-          'supplier_id': provider.id,
-          'supplier_name': provider.name,
-          'total_amount': draftTotal,
-          'status': 'pending',
-          'branch_id': int.tryParse(_activeBranch.id),
-          'items': draft.map(_orderItemPayload).toList(),
-        },
-      );
-      _upsertOrder(_orderFromApi(response));
-      draft.clear();
-      await _saveLocalSnapshot();
-      _errorMessage = 'Pedido emitido.';
-      notifyListeners();
-    } on ProvidersApiException catch (error) {
-      final localOrder = ProviderOrder(
-        id: localOrderId,
-        providerId: provider.id,
-        dateLabel: _dateLabel(now.toIso8601String()),
-        createdAt: now,
-        status: 'Pendiente',
-        total: draftTotal,
-        items: List<DraftOrderItem>.from(draft),
-      );
-      _upsertOrder(localOrder);
-      draft.clear();
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Pedido emitido.'
-          : error.message;
-      notifyListeners();
-    }
+    final localOrder = ProviderOrder(
+      id: localOrderId,
+      providerId: provider.id,
+      dateLabel: _dateLabel(now.toIso8601String()),
+      createdAt: now,
+      status: 'Pendiente',
+      total: draftTotal,
+      items: List<DraftOrderItem>.from(draft),
+    );
+    _upsertOrder(localOrder);
+    draft.clear();
+    await _saveLocalSnapshot();
+    _errorMessage = 'Pedido emitido.';
+    notifyListeners();
   }
 
   Future<void> absorbSaleItems(List<SaleProductBreakdown> items) async {
@@ -431,12 +286,14 @@ class ProvidersController extends ChangeNotifier {
         pack: 'Unidad',
         lastPrice: product.cost,
       );
-      final draft = _draftItemsFor(supplierId);
-      final index = draft.indexWhere((entry) => entry.item.id == providerItem.id);
+      final suggestions = _suggestedItemsFor(supplierId);
+      final index = suggestions.indexWhere((entry) => entry.item.id == providerItem.id);
       if (index == -1) {
-        draft.add(DraftOrderItem(item: providerItem, quantity: item.quantity));
+        suggestions.add(DraftOrderItem(item: providerItem, quantity: item.quantity));
       } else {
-        draft[index] = draft[index].copyWith(quantity: draft[index].quantity + item.quantity);
+        suggestions[index] = suggestions[index].copyWith(
+          quantity: suggestions[index].quantity + item.quantity,
+        );
       }
       changed = true;
     }
@@ -444,6 +301,7 @@ class ProvidersController extends ChangeNotifier {
       return;
     }
     await _saveLocalSnapshot();
+    _errorMessage = 'Venta absorbida como sugerencia de reposición.';
     notifyListeners();
   }
 
@@ -472,55 +330,18 @@ class ProvidersController extends ChangeNotifier {
     if (index == -1 || _orders[index].isReceived) {
       return;
     }
-    if (await _localStoreService.isOfflineOnly()) {
-      _orders[index] = _orders[index].copyWith(status: 'Recibido');
-      await _catalogController.applyOrderStockIncrease(
-        items: _orders[index].items
-            .map((item) => {
-                  'sku': _skuForProductId(item.item.productId),
-                  'quantity': item.quantity,
-                })
-            .toList(),
-      );
-      await _saveLocalSnapshot();
-      _errorMessage = 'Recepción guardada.';
-      notifyListeners();
-      return;
-    }
-    try {
-      final response = await _apiService.updateOrderStatus(
-        token: _accessToken,
-        orderId: orderId,
-        status: 'received',
-      );
-      _orders[index] = _orderFromApi(response);
-      await _catalogController.applyOrderStockIncrease(
-        items: _orders[index].items
-            .map((item) => {
-                  'sku': _skuForProductId(item.item.productId),
-                  'quantity': item.quantity,
-                })
-            .toList(),
-      );
-      await _catalogController.reload();
-      await _saveLocalSnapshot();
-      notifyListeners();
-    } on ProvidersApiException catch (error) {
-      _orders[index] = _orders[index].copyWith(status: 'Recibido');
-      await _catalogController.applyOrderStockIncrease(
-        items: _orders[index].items
-            .map((item) => {
-                  'sku': _skuForProductId(item.item.productId),
-                  'quantity': item.quantity,
-                })
-            .toList(),
-      );
-      await _saveLocalSnapshot();
-      _errorMessage = _isConnectivityError(error)
-          ? 'Recepción guardada.'
-          : error.message;
-      notifyListeners();
-    }
+    _orders[index] = _orders[index].copyWith(status: 'Recibido');
+    await _catalogController.applyOrderStockIncrease(
+      items: _orders[index].items
+          .map((item) => {
+                'sku': _skuForProductId(item.item.productId),
+                'quantity': item.quantity,
+              })
+          .toList(),
+    );
+    await _saveLocalSnapshot();
+    _errorMessage = 'Recepción guardada.';
+    notifyListeners();
   }
 
   int productCountFor(String providerId) {
@@ -559,6 +380,16 @@ class ProvidersController extends ChangeNotifier {
       providers: _providers.map(_providerToJson).toList(),
       orders: _orders.map(_orderToJson).toList(),
       draftsByProvider: _draftItemsByProvider.map(
+        (providerId, items) => MapEntry(
+          providerId,
+          items.map(_draftItemToJson).toList(),
+        ),
+      ),
+    );
+    await _localStoreService.writeSection(
+      _scopeKey,
+      _providerSuggestionsSection,
+      _suggestedItemsByProvider.map(
         (providerId, items) => MapEntry(
           providerId,
           items.map(_draftItemToJson).toList(),
@@ -604,6 +435,7 @@ class ProvidersController extends ChangeNotifier {
                 )
               : const <String, List<DraftOrderItem>>{},
         );
+      await _restoreSuggestedItems();
       if (_providers.isNotEmpty) {
         final exists = _providers.any((provider) => provider.id == _selectedProviderId);
         _selectedProviderId = exists ? _selectedProviderId : _providers.first.id;
@@ -642,6 +474,7 @@ class ProvidersController extends ChangeNotifier {
               )
             : const <String, List<DraftOrderItem>>{},
       );
+    await _restoreSuggestedItems();
     if (_providers.isNotEmpty) {
       final exists = _providers.any((provider) => provider.id == _selectedProviderId);
       _selectedProviderId = exists ? _selectedProviderId : _providers.first.id;
@@ -749,64 +582,6 @@ class ProvidersController extends ChangeNotifier {
     );
   }
 
-  bool _isConnectivityError(ProvidersApiException error) {
-    return error.statusCode == null &&
-        (error.message.contains('No se pudo conectar') || error.message.contains('Tiempo de espera'));
-  }
-
-  ProviderRecord _providerFromApi(Map<String, dynamic> json) {
-    final notes = json['notes']?.toString() ?? '';
-    return ProviderRecord(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? 'Proveedor',
-      contact: json['contact_name']?.toString() ?? 'Contacto a definir',
-      phone: json['phone']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
-      category: _categoryFromNotes(notes),
-      isActive: _isActiveFromNotes(notes),
-      orderDays: _orderDaysFromNotes(notes),
-      deliveryDays: _deserializeDays(json['delivery_days']?.toString()),
-    );
-  }
-
-  ProviderOrder _orderFromApi(Map<String, dynamic> json) {
-    final items = (json['items'] as List<dynamic>? ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(
-          (item) => DraftOrderItem(
-            item: ProviderCatalogItem(
-              id: '${json['supplier_id']}-${item['product_sku']}',
-              productId: _productIdForSku(item['product_sku']?.toString() ?? ''),
-              name: item['product_name']?.toString() ?? 'Producto',
-              pack: 'Unidad',
-              lastPrice: (item['price'] as num?)?.toDouble() ?? 0,
-            ),
-            quantity: ((item['quantity'] as num?)?.round() ?? 0),
-          ),
-        )
-        .toList();
-    return ProviderOrder(
-      id: json['id'].toString(),
-      providerId: json['supplier_id']?.toString() ?? '',
-      dateLabel: _dateLabel(json['created_at']?.toString()),
-      createdAt: _parseDate(json['created_at']?.toString()),
-      status: _statusLabel(json['status']?.toString() ?? 'pending'),
-      total: (json['total_amount'] as num?)?.toDouble() ?? 0,
-      items: items,
-    );
-  }
-
-  Map<String, dynamic> _orderItemPayload(DraftOrderItem item) {
-    final sku = _skuForProductId(item.item.productId);
-    return {
-      'product_sku': sku,
-      'product_name': item.item.name,
-      'quantity': item.quantity,
-      'price': item.item.lastPrice,
-      'total': item.total,
-    };
-  }
-
   String _skuForProductId(String productId) {
     for (final product in _catalogController.products) {
       if (product.id == productId) {
@@ -814,91 +589,6 @@ class ProvidersController extends ChangeNotifier {
       }
     }
     return productId;
-  }
-
-  String _productIdForSku(String sku) {
-    for (final product in _catalogController.products) {
-      if (product.sku == sku) {
-        return product.id;
-      }
-    }
-    return sku;
-  }
-
-  String _notesFor({
-    required String category,
-    required bool isActive,
-    required List<int> orderDays,
-  }) {
-    return [
-      'Categoria: $category',
-      'Estado: ${isActive ? 'activo' : 'inactivo'}',
-      'DiasPedido: ${_serializeDays(orderDays)}',
-    ].join('\n');
-  }
-
-  String _categoryFromNotes(String notes) {
-    for (final line in notes.split('\n')) {
-      if (line.toLowerCase().startsWith('categoria:')) {
-        return line.split(':').skip(1).join(':').trim();
-      }
-    }
-    return 'General';
-  }
-
-  bool _isActiveFromNotes(String notes) {
-    for (final line in notes.split('\n')) {
-      if (line.toLowerCase().startsWith('estado:')) {
-        return !line.toLowerCase().contains('inactivo');
-      }
-    }
-    return true;
-  }
-
-  List<int> _orderDaysFromNotes(String notes) {
-    for (final line in notes.split('\n')) {
-      if (line.toLowerCase().startsWith('diaspedido:')) {
-        return _deserializeDays(line.split(':').skip(1).join(':').trim());
-      }
-    }
-    return const [];
-  }
-
-  String _serializeDays(List<int> days) {
-    if (days.isEmpty) {
-      return '';
-    }
-    final normalized = [...days]..sort();
-    return normalized.join(',');
-  }
-
-  List<int> _deserializeDays(String? raw) {
-    if (raw == null || raw.trim().isEmpty) {
-      return const [];
-    }
-    return raw
-        .split(',')
-        .map((value) => int.tryParse(value.trim()))
-        .whereType<int>()
-        .where((value) => value >= 1 && value <= 7)
-        .toSet()
-        .toList()
-      ..sort();
-  }
-
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'received':
-        return 'Recibido';
-      case 'pending':
-        return 'Pendiente';
-      case 'paid':
-        return 'Pagado';
-      case 'cancelled':
-        return 'Cancelado';
-      default:
-        return status.toLowerCase() == 'borrador' ? 'Borrador' : 'Pendiente';
-    }
   }
 
   String _dateLabel(String? value) {
@@ -916,9 +606,36 @@ class ProvidersController extends ChangeNotifier {
   String get _providersSection => 'providers_${_activeBranch.id}';
   String get _providerOrdersSection => 'provider_orders_${_activeBranch.id}';
   String get _providerDraftsSection => 'provider_drafts_${_activeBranch.id}';
+  String get _providerSuggestionsSection => 'provider_suggestions_${_activeBranch.id}';
 
   List<DraftOrderItem> _draftItemsFor(String providerId) {
     return _draftItemsByProvider.putIfAbsent(providerId, () => <DraftOrderItem>[]);
+  }
+
+  List<DraftOrderItem> _suggestedItemsFor(String providerId) {
+    return _suggestedItemsByProvider.putIfAbsent(providerId, () => <DraftOrderItem>[]);
+  }
+
+  Future<void> _restoreSuggestedItems() async {
+    final suggestionsJson = await _localStoreService.readSection(
+      _scopeKey,
+      _providerSuggestionsSection,
+    );
+    _suggestedItemsByProvider
+      ..clear()
+      ..addAll(
+        suggestionsJson is Map<String, dynamic>
+            ? suggestionsJson.map(
+                (key, value) => MapEntry(
+                  key,
+                  (value as List<dynamic>? ?? const [])
+                      .whereType<Map<String, dynamic>>()
+                      .map(_draftItemFromJson)
+                      .toList(),
+                ),
+              )
+            : const <String, List<DraftOrderItem>>{},
+      );
   }
 
   void _persistDrafts() {

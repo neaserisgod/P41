@@ -8,7 +8,34 @@ class GlobalLookupLocalService {
   const GlobalLookupLocalService();
 
   Future<bool> hasCatalog() async {
-    return _catalogFile.exists();
+    return catalogFile.exists();
+  }
+
+  Future<bool> hasImages() async {
+    if (!await imagesDirectory.exists()) {
+      return false;
+    }
+    await for (final entity in imagesDirectory.list(followLinks: false)) {
+      if (entity is File && _isSupportedImage(entity.path)) {
+        return true;
+      }
+    }
+    final nestedDirectory = Directory(
+      '${imagesDirectory.path}${Platform.pathSeparator}imagenes_productos',
+    );
+    if (!await nestedDirectory.exists()) {
+      return false;
+    }
+    await for (final entity in nestedDirectory.list(followLinks: false)) {
+      if (entity is File && _isSupportedImage(entity.path)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> hasRequiredResources() async {
+    return await hasCatalog() && await hasImages();
   }
 
   Future<GlobalCatalogProduct?> lookup(String barcode) async {
@@ -19,7 +46,7 @@ class GlobalLookupLocalService {
 
     Database? db;
     try {
-      db = sqlite3.open(_catalogFile.path, mode: OpenMode.readOnly);
+      db = sqlite3.open(catalogFile.path, mode: OpenMode.readOnly);
       final rows = db.select(
         '''
         SELECT barcode, name, brand, category, description, suggested_price, unit
@@ -55,7 +82,7 @@ class GlobalLookupLocalService {
 
     Database? db;
     try {
-      db = sqlite3.open(_catalogFile.path, mode: OpenMode.readOnly);
+      db = sqlite3.open(catalogFile.path, mode: OpenMode.readOnly);
       final rows = db.select(
         '''
         SELECT
@@ -120,9 +147,17 @@ class GlobalLookupLocalService {
       return '';
     }
     final candidates = <File>[
-      File('${_imagesDir.path}${Platform.pathSeparator}$barcode.jpg'),
+      File('${imagesDirectory.path}${Platform.pathSeparator}$barcode.jpg'),
+      File('${imagesDirectory.path}${Platform.pathSeparator}$barcode.jpeg'),
+      File('${imagesDirectory.path}${Platform.pathSeparator}$barcode.png'),
       File(
-        '${_imagesDir.path}${Platform.pathSeparator}imagenes_productos${Platform.pathSeparator}$barcode.jpg',
+        '${imagesDirectory.path}${Platform.pathSeparator}imagenes_productos${Platform.pathSeparator}$barcode.jpg',
+      ),
+      File(
+        '${imagesDirectory.path}${Platform.pathSeparator}imagenes_productos${Platform.pathSeparator}$barcode.jpeg',
+      ),
+      File(
+        '${imagesDirectory.path}${Platform.pathSeparator}imagenes_productos${Platform.pathSeparator}$barcode.png',
       ),
     ];
     for (final file in candidates) {
@@ -133,15 +168,23 @@ class GlobalLookupLocalService {
     return '';
   }
 
-  File get _catalogFile => File(
-    '${_resourcesDir.path}${Platform.pathSeparator}global_lookup.sqlite',
+  bool _isSupportedImage(String path) {
+    final lower = path.toLowerCase();
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp');
+  }
+
+  File get catalogFile => File(
+    '${resourcesDirectory.path}${Platform.pathSeparator}global_lookup.sqlite',
   );
 
-  Directory get _imagesDir => Directory(
-    '${_resourcesDir.path}${Platform.pathSeparator}imagenes_productos',
+  Directory get imagesDirectory => Directory(
+    '${resourcesDirectory.path}${Platform.pathSeparator}imagenes_productos',
   );
 
-  Directory get _resourcesDir => Directory(
+  Directory get resourcesDirectory => Directory(
     '${Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.'}${Platform.pathSeparator}.p41${Platform.pathSeparator}resources',
   );
 }

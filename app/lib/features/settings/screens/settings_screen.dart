@@ -7,10 +7,10 @@ import '../../../app/state/catalog_controller.dart';
 import '../../../app/state/session_controller.dart';
 
 enum SettingsSection {
-  local('Local'),
+  local('Negocio'),
   people('Equipo'),
-  sales('Venta'),
-  system('Sistema');
+  sales('Operación'),
+  system('Cuenta');
 
   const SettingsSection(this.label);
   final String label;
@@ -140,10 +140,10 @@ class _SettingsSectionList extends StatelessWidget {
           final section = sections[index];
           final selected = section == selectedSection;
           final subtitle = switch (section) {
-            SettingsSection.local => hasSingleBranch ? 'Nombre y datos del local.' : 'Locales y sucursales.',
-            SettingsSection.people => 'Quién usa el sistema.',
-            SettingsSection.sales => 'Caja y venta diaria.',
-            SettingsSection.system => 'Cuenta y estado general.',
+            SettingsSection.local => hasSingleBranch ? 'Nombre comercial del local.' : 'Locales, nombres y sucursales.',
+            SettingsSection.people => 'Quién puede entrar y operar.',
+            SettingsSection.sales => 'Reglas base de operación diaria.',
+            SettingsSection.system => 'Cuenta activa, respaldo y estado general.',
           };
 
           return InkWell(
@@ -584,6 +584,14 @@ class _SystemPanelBodyState extends State<_SystemPanelBody> {
   LocalBackupSummary? _latestBackup;
   List<LocalBackupSummary> _backups = const [];
 
+  String get _backupScopeKey =>
+      widget.sessionController.account?.ownerEmail ??
+      widget.sessionController.accountName ??
+      'default';
+
+  String get _backupAccountName =>
+      widget.sessionController.accountName ?? 'p41';
+
   @override
   void initState() {
     super.initState();
@@ -591,8 +599,12 @@ class _SystemPanelBodyState extends State<_SystemPanelBody> {
   }
 
   Future<void> _loadLatestBackup() async {
-    final latest = await _backupService.latestBackup();
-    final backups = await _backupService.listBackups();
+    final latest = await _backupService.latestBackup(
+      scopeKey: _backupScopeKey,
+    );
+    final backups = await _backupService.listBackups(
+      scopeKey: _backupScopeKey,
+    );
     if (!mounted) {
       return;
     }
@@ -604,7 +616,10 @@ class _SystemPanelBodyState extends State<_SystemPanelBody> {
 
   Future<void> _createBackup() async {
     setState(() => _isWorking = true);
-    final summary = await _backupService.createBackup();
+    final summary = await _backupService.createBackup(
+      scopeKey: _backupScopeKey,
+      accountName: _backupAccountName,
+    );
     if (!mounted) {
       return;
     }
@@ -621,8 +636,12 @@ class _SystemPanelBodyState extends State<_SystemPanelBody> {
   Future<void> _restoreBackup(String path) async {
     setState(() => _isWorking = true);
     final restored = await _backupService.restoreBackup(path);
-    final latest = await _backupService.latestBackup();
-    final backups = await _backupService.listBackups();
+    final latest = await _backupService.latestBackup(
+      scopeKey: _backupScopeKey,
+    );
+    final backups = await _backupService.listBackups(
+      scopeKey: _backupScopeKey,
+    );
     if (!mounted) {
       return;
     }
@@ -667,6 +686,16 @@ class _SystemPanelBodyState extends State<_SystemPanelBody> {
               ? 'Todavía no hay respaldo creado en este equipo.'
               : 'Último respaldo: ${_latestBackup!.fileName}',
           style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Modo local: los respaldos quedan sólo en este equipo y dentro del SQLite exportado.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Estos respaldos quedan asociados a la cuenta ${widget.sessionController.account?.ownerEmail ?? '-'} en este equipo.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 14),
         Wrap(

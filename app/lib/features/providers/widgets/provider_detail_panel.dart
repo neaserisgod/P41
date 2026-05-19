@@ -17,11 +17,15 @@ class ProviderDetailPanel extends StatelessWidget {
     required this.catalog,
     required this.orders,
     required this.draftItems,
+    required this.suggestedItems,
     required this.draftUnits,
     required this.draftTotal,
+    required this.suggestedUnits,
     required this.onAddToDraft,
     required this.onIncreaseDraftItem,
     required this.onDecreaseDraftItem,
+    required this.onAbsorbSuggestions,
+    required this.onClearSuggestions,
     required this.onCreateOrder,
     required this.onCopyDraft,
     required this.onReceiveOrder,
@@ -37,11 +41,15 @@ class ProviderDetailPanel extends StatelessWidget {
   final List<ProviderCatalogItem> catalog;
   final List<ProviderOrder> orders;
   final List<DraftOrderItem> draftItems;
+  final List<DraftOrderItem> suggestedItems;
   final int draftUnits;
   final double draftTotal;
+  final int suggestedUnits;
   final ValueChanged<ProviderCatalogItem> onAddToDraft;
   final ValueChanged<String> onIncreaseDraftItem;
   final ValueChanged<String> onDecreaseDraftItem;
+  final Future<void> Function() onAbsorbSuggestions;
+  final Future<void> Function() onClearSuggestions;
   final Future<void> Function() onCreateOrder;
   final Future<void> Function() onCopyDraft;
   final Future<void> Function(String) onReceiveOrder;
@@ -84,11 +92,15 @@ class ProviderDetailPanel extends StatelessWidget {
               ProviderDetailSection.compose => _ComposeOrderSection(
                   catalog: catalog,
                   draftItems: draftItems,
+                  suggestedItems: suggestedItems,
                   draftUnits: draftUnits,
                   draftTotal: draftTotal,
+                  suggestedUnits: suggestedUnits,
                   onAddToDraft: onAddToDraft,
                   onIncreaseDraftItem: onIncreaseDraftItem,
                   onDecreaseDraftItem: onDecreaseDraftItem,
+                  onAbsorbSuggestions: onAbsorbSuggestions,
+                  onClearSuggestions: onClearSuggestions,
                   onCreateOrder: onCreateOrder,
                   onCopyDraft: onCopyDraft,
                 ),
@@ -417,22 +429,30 @@ class _ComposeOrderSection extends StatelessWidget {
   const _ComposeOrderSection({
     required this.catalog,
     required this.draftItems,
+    required this.suggestedItems,
     required this.draftUnits,
     required this.draftTotal,
+    required this.suggestedUnits,
     required this.onAddToDraft,
     required this.onIncreaseDraftItem,
     required this.onDecreaseDraftItem,
+    required this.onAbsorbSuggestions,
+    required this.onClearSuggestions,
     required this.onCreateOrder,
     required this.onCopyDraft,
   });
 
   final List<ProviderCatalogItem> catalog;
   final List<DraftOrderItem> draftItems;
+  final List<DraftOrderItem> suggestedItems;
   final int draftUnits;
   final double draftTotal;
+  final int suggestedUnits;
   final ValueChanged<ProviderCatalogItem> onAddToDraft;
   final ValueChanged<String> onIncreaseDraftItem;
   final ValueChanged<String> onDecreaseDraftItem;
+  final Future<void> Function() onAbsorbSuggestions;
+  final Future<void> Function() onClearSuggestions;
   final Future<void> Function() onCreateOrder;
   final Future<void> Function() onCopyDraft;
 
@@ -447,7 +467,7 @@ class _ComposeOrderSection extends StatelessWidget {
             title: 'Productos de este proveedor',
             child: catalog.isEmpty
                 ? const _EmptyInlineMessage(
-                    text: 'No hay productos vinculados a este proveedor.',
+                    text: 'Todavía no hay productos vinculados. Asignales este proveedor desde mercadería.',
                   )
                 : ListView.separated(
                     itemCount: catalog.length,
@@ -553,67 +573,137 @@ class _ComposeOrderSection extends StatelessWidget {
                       ),
                     ],
                   ),
-            child: draftItems.isEmpty
+            child: draftItems.isEmpty && suggestedItems.isEmpty
                 ? const _EmptyInlineMessage(
-                    text: 'Agregá productos desde la izquierda.',
+                    text: 'Armá el pedido manualmente o convertí sugerencias de reposición.',
                   )
-                : ListView.separated(
-                    itemCount: draftItems.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final item = draftItems[index];
-                      return Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: palette.surfaceMuted,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: palette.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                : ListView(
+                    children: [
+                      if (suggestedItems.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: palette.accentSoft.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: palette.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Sugerencias de reposición',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: palette.textStrong,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$suggestedUnits unidades sugeridas por ventas recientes. No entran al pedido hasta que lo confirmes.',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: palette.textMuted,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: suggestedItems
+                                    .map(
+                                      (item) => _MiniItemPill(
+                                        label: '${item.item.name} x${item.quantity}',
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
                                 children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: onClearSuggestions,
+                                      child: const Text('Descartar'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: FilledButton(
+                                      onPressed: onAbsorbSuggestions,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: palette.warning,
+                                        foregroundColor: palette.textStrong,
+                                      ),
+                                      child: const Text('Pasar al pedido'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (draftItems.isNotEmpty) const SizedBox(height: 12),
+                      ],
+                      if (draftItems.isNotEmpty)
+                        ...List.generate(draftItems.length, (index) {
+                          final item = draftItems[index];
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: index == draftItems.length - 1 ? 0 : 8),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: palette.surfaceMuted,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: palette.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.item.name,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w800,
+                                            color: palette.textStrong,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _money(item.total),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: palette.textMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () => onDecreaseDraftItem(item.item.id),
+                                    icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
+                                  ),
                                   Text(
-                                    item.item.name,
+                                    '${item.quantity}',
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w800,
                                       color: palette.textStrong,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _money(item.total),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: palette.textMuted,
-                                    ),
+                                  IconButton(
+                                    onPressed: () => onIncreaseDraftItem(item.item.id),
+                                    icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
                                   ),
                                 ],
                               ),
                             ),
-                            IconButton(
-                              onPressed: () => onDecreaseDraftItem(item.item.id),
-                              icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
-                            ),
-                            Text(
-                              '${item.quantity}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: palette.textStrong,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => onIncreaseDraftItem(item.item.id),
-                              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                          );
+                        }),
+                    ],
                   ),
           ),
         ),

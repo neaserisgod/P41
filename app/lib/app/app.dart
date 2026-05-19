@@ -162,6 +162,8 @@ class _AppRootState extends State<AppRoot> {
                 );
               },
               errorMessage: _sessionController.sessionError,
+              noticeMessage: _sessionController.sessionNotice,
+              onOpenLogin: _sessionController.showLoginScreen,
             );
           case SessionStage.login:
             return LoginScreen(
@@ -189,6 +191,8 @@ class _AppRootState extends State<AppRoot> {
                 );
               },
               errorMessage: _sessionController.sessionError,
+              noticeMessage: _sessionController.sessionNotice,
+              onCreateAccount: _sessionController.showSetupScreen,
             );
           case SessionStage.branchSelection:
             return BranchSelectionScreen(
@@ -260,25 +264,25 @@ class _OperationalShellState extends State<OperationalShell> {
   @override
   void initState() {
     super.initState();
-    _tabManager = TabManager.initial();
+    _tabManager = TabManager.initial(
+      activeKind: widget.sessionController.shouldStartOnboarding
+          ? WorkspaceKind.home
+          : WorkspaceKind.pos,
+    );
     _catalogController = CatalogController(
-      accessToken: widget.sessionController.accessToken!,
       initialBranch: widget.sessionController.activeBranch!,
       scopeKey: widget.sessionController.account!.ownerEmail,
     );
     _cashController = CashController(
-      accessToken: widget.sessionController.accessToken!,
       initialBranch: widget.sessionController.activeBranch!,
       scopeKey: widget.sessionController.account!.ownerEmail,
     );
     _salesController = SalesController(
-      accessToken: widget.sessionController.accessToken!,
       initialBranch: widget.sessionController.activeBranch!,
       scopeKey: widget.sessionController.account!.ownerEmail,
     );
     _providersController = ProvidersController(
       catalogController: _catalogController,
-      accessToken: widget.sessionController.accessToken!,
       initialBranch: widget.sessionController.activeBranch!,
       scopeKey: widget.sessionController.account!.ownerEmail,
     );
@@ -313,35 +317,30 @@ class _OperationalShellState extends State<OperationalShell> {
   }
 
   void _handleSessionChanged() {
-    final token = widget.sessionController.accessToken;
     final branch = widget.sessionController.activeBranch;
-    if (token == null || branch == null) {
+    if (branch == null) {
       return;
     }
     unawaited(
       _catalogController.updateSession(
-        accessToken: token,
         activeBranch: branch,
         scopeKey: widget.sessionController.account?.ownerEmail ?? 'default',
       ),
     );
     unawaited(
       _providersController.updateSession(
-        accessToken: token,
         activeBranch: branch,
         scopeKey: widget.sessionController.account?.ownerEmail ?? 'default',
       ),
     );
     unawaited(
       _cashController.updateSession(
-        accessToken: token,
         activeBranch: branch,
         scopeKey: widget.sessionController.account?.ownerEmail ?? 'default',
       ),
     );
     unawaited(
       _salesController.updateSession(
-        accessToken: token,
         activeBranch: branch,
         scopeKey: widget.sessionController.account?.ownerEmail ?? 'default',
       ),

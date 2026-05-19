@@ -12,7 +12,11 @@ const _apiBaseUrl = String.fromEnvironment(
   'P41_API_BASE_URL',
   defaultValue: 'http://31.97.166.250',
 );
-const _updatesUrl = String.fromEnvironment(
+const _platformManifestUrl = String.fromEnvironment(
+  'P41_PLATFORM_MANIFEST_URL',
+  defaultValue: '$_apiBaseUrl/api/platform/distribution/bootstrap-manifest',
+);
+const _legacyUpdatesUrl = String.fromEnvironment(
   'P41_UPDATES_URL',
   defaultValue: '$_apiBaseUrl/static/updates/p41/version.json',
 );
@@ -167,19 +171,39 @@ class P41BootstrapController extends ChangeNotifier {
   }
 
   Future<P41UpdateManifest> _fetchManifest() async {
-    final response = await http
-        .get(
-          Uri.parse('$_updatesUrl?t=${DateTime.now().millisecondsSinceEpoch}'),
-        )
-        .timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200) {
-      throw Exception('version.json respondió HTTP ${response.statusCode}');
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final candidates = <({String url, bool legacy})>[
+      (url: '$_platformManifestUrl?t=$timestamp', legacy: false),
+      (url: '$_legacyUpdatesUrl?t=$timestamp', legacy: true),
+    ];
+
+    Object? lastError;
+    for (final candidate in candidates) {
+      try {
+        final response = await http
+            .get(Uri.parse(candidate.url))
+            .timeout(const Duration(seconds: 15));
+        if (response.statusCode != 200) {
+          throw Exception(
+            candidate.legacy
+                ? 'version.json respondió HTTP ${response.statusCode}'
+                : 'bootstrap-manifest respondió HTTP ${response.statusCode}',
+          );
+        }
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          throw Exception(
+            candidate.legacy
+                ? 'version.json no es válido.'
+                : 'bootstrap-manifest no es válido.',
+          );
+        }
+        return P41UpdateManifest.fromBackendManifest(decoded, platformMode);
+      } catch (error) {
+        lastError = error;
+      }
     }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception('version.json no es válido.');
-    }
-    return P41UpdateManifest.fromVersionJson(decoded, platformMode);
+    throw Exception(lastError?.toString() ?? 'No se pudo obtener el manifest.');
   }
 
   P41UpdateManifest _fallbackManifest() {

@@ -21,36 +21,46 @@ class LocalBackupService {
 
   final LocalStoreService _localStoreService;
 
-  Directory get _backupDirectory {
+  Directory _backupDirectoryFor(String scopeKey) {
     final home = Platform.environment['HOME'] ?? '.';
-    return Directory('$home/.p41/backups');
+    return Directory(
+      '$home/.p41/backups/${_scopeKeySlug(scopeKey)}',
+    );
   }
 
-  Future<LocalBackupSummary> createBackup() async {
-    final directory = _backupDirectory;
+  Future<LocalBackupSummary> createBackup({
+    required String scopeKey,
+    required String accountName,
+  }) async {
+    final directory = _backupDirectoryFor(scopeKey);
     if (!await directory.exists()) {
       await directory.create(recursive: true);
     }
 
     final now = DateTime.now();
+    final accountSlug = _scopeKeySlug(accountName);
     final file = File(
-      '${directory.path}${Platform.pathSeparator}p41-backup-${now.toIso8601String().replaceAll(':', '-').replaceAll('.', '-')}Z.sqlite',
+      '${directory.path}${Platform.pathSeparator}${accountSlug.isEmpty ? 'p41' : accountSlug}-backup-${now.toIso8601String().replaceAll(':', '-').replaceAll('.', '-')}Z.sqlite',
     );
 
     await _localStoreService.exportDatabase(file.path);
     return LocalBackupSummary(path: file.path, createdAt: now);
   }
 
-  Future<LocalBackupSummary?> latestBackup() async {
-    final backups = await listBackups();
+  Future<LocalBackupSummary?> latestBackup({
+    required String scopeKey,
+  }) async {
+    final backups = await listBackups(scopeKey: scopeKey);
     if (backups.isEmpty) {
       return null;
     }
     return backups.first;
   }
 
-  Future<List<LocalBackupSummary>> listBackups() async {
-    final directory = _backupDirectory;
+  Future<List<LocalBackupSummary>> listBackups({
+    required String scopeKey,
+  }) async {
+    final directory = _backupDirectoryFor(scopeKey);
     if (!await directory.exists()) {
       return const [];
     }
@@ -75,7 +85,13 @@ class LocalBackupService {
   }
 
   Future<bool> restoreLatestBackup() async {
-    final backup = await latestBackup();
+    return false;
+  }
+
+  Future<bool> restoreLatestBackupFor({
+    required String scopeKey,
+  }) async {
+    final backup = await latestBackup(scopeKey: scopeKey);
     if (backup == null) {
       return false;
     }
@@ -89,5 +105,13 @@ class LocalBackupService {
     }
     await _localStoreService.restoreDatabase(path);
     return true;
+  }
+
+  String _scopeKeySlug(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return 'default';
+    }
+    return normalized.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
   }
 }

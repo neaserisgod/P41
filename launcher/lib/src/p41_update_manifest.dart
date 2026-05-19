@@ -15,7 +15,7 @@ class P41UpdateManifest {
   final String? launcherInstallerUrl;
   final P41ResourceBundle? resources;
 
-  factory P41UpdateManifest.fromVersionJson(
+  factory P41UpdateManifest.fromBackendManifest(
     Map<String, dynamic> json,
     P41PlatformMode platformMode,
   ) {
@@ -62,6 +62,11 @@ class P41UpdateManifest {
       resources: P41ResourceBundle.fromJson(resourcesMap),
     );
   }
+
+  factory P41UpdateManifest.fromVersionJson(
+    Map<String, dynamic> json,
+    P41PlatformMode platformMode,
+  ) => P41UpdateManifest.fromBackendManifest(json, platformMode);
 }
 
 class P41ResourceBundle {

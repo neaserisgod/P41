@@ -7,7 +7,9 @@ class SetupAdminScreen extends StatefulWidget {
   const SetupAdminScreen({
     super.key,
     required this.onCreateAccount,
+    required this.onOpenLogin,
     this.errorMessage,
+    this.noticeMessage,
   });
 
   final Future<void> Function({
@@ -15,7 +17,9 @@ class SetupAdminScreen extends StatefulWidget {
     required String ownerEmail,
     required String password,
   }) onCreateAccount;
+  final VoidCallback onOpenLogin;
   final String? errorMessage;
+  final String? noticeMessage;
 
   @override
   State<SetupAdminScreen> createState() => _SetupAdminScreenState();
@@ -86,6 +90,20 @@ class _SetupAdminScreenState extends State<SetupAdminScreen> {
               ),
             ),
           ],
+          if (widget.noticeMessage != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.noticeMessage!,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: palette.success,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
@@ -118,6 +136,14 @@ class _SetupAdminScreenState extends State<SetupAdminScreen> {
                 _isSubmitting ? 'Creando...' : 'Crear cuenta',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: _isSubmitting ? null : widget.onOpenLogin,
+              child: const Text('Ya tengo cuenta'),
             ),
           ),
         ],
@@ -191,29 +217,27 @@ class AccessScaffold extends StatelessWidget {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 1320),
                       child: wide
-                          ? IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(
-                                    flex: 7,
-                                    child: _AccessHero(
-                                      eyebrow: eyebrow,
-                                      title: title,
-                                      subtitle: subtitle,
-                                      compact: false,
-                                    ),
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 7,
+                                  child: _AccessHero(
+                                    eyebrow: eyebrow,
+                                    title: title,
+                                    subtitle: subtitle,
+                                    compact: false,
                                   ),
-                                  const SizedBox(width: 24),
-                                  Expanded(
-                                    flex: 5,
-                                    child: _AccessPanel(
-                                      compact: compact,
-                                      child: child,
-                                    ),
+                                ),
+                                const SizedBox(width: 24),
+                                Expanded(
+                                  flex: 5,
+                                  child: _AccessPanel(
+                                    compact: compact,
+                                    child: child,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             )
                           : Column(
                               children: [
